@@ -1,0 +1,7 @@
+{
+  "version": 2,
+  "name": "rastru",
+  "rewrites": [
+    { "source": "/api/notion/:path*", "destination": "/api/notion" }
+  ]
+}
