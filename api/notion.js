@@ -1,25 +1,21 @@
+// Vercel Serverless Function — Notion API Proxy (CommonJS)
 const TOKEN = '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';
 
-export const config = { runtime: 'edge' };
+module.exports = async function handler(req, res) {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PATCH, DELETE');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
-export default async function handler(req) {
   if (req.method === 'OPTIONS') {
-    return new Response(null, {
-      status: 204,
-      headers: {
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Methods': 'GET, POST, PATCH, DELETE',
-        'Access-Control-Allow-Headers': 'Content-Type',
-      },
-    });
+    return res.status(204).end();
   }
 
-  const url = new URL(req.url);
-  const notionPath = url.pathname.replace(/^\/api\/notion/, '');
-  const notionUrl = 'https://api.notion.com' + notionPath + url.search;
-  const body = req.method !== 'GET' ? await req.text() : undefined;
+  const notionPath = req.url.replace(/^\/api\/notion/, '');
+  const notionUrl = 'https://api.notion.com' + notionPath;
 
-  const res = await fetch(notionUrl, {
+  const body = req.method !== 'GET' ? JSON.stringify(req.body) : undefined;
+
+  const upstream = await fetch(notionUrl, {
     method: req.method,
     headers: {
       'Authorization': 'Bearer ' + TOKEN,
@@ -29,13 +25,6 @@ export default async function handler(req) {
     body,
   });
 
-  const data = await res.text();
-
-  return new Response(data, {
-    status: res.status,
-    headers: {
-      'Content-Type': 'application/json',
-      'Access-Control-Allow-Origin': '*',
-    },
-  });
-}
+  const data = await upstream.text();
+  res.status(upstream.status).setHeader('Content-Type', 'application/json').send(data);
+};
