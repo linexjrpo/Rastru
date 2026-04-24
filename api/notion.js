@@ -1,4 +1,4 @@
-const TOKEN = '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';
+const TOKEN = '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';
 
 export const config = { runtime: 'edge' };
 
