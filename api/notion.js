@@ -1,3 +1,4 @@
+// Vercel Serverless Function — Notion API Proxy (CommonJS)
 const TOKEN = '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';
 
 module.exports = async function handler(req, res) {
@@ -9,8 +10,11 @@ module.exports = async function handler(req, res) {
     return res.status(204).end();
   }
 
-  const notionPath = req.url.replace(/^\/api\/notion/, '');
+  // Strip query params — only forward the path to Notion
+  const urlObj = new URL(req.url, 'https://rastru.vercel.app');
+  const notionPath = urlObj.pathname.replace(/^\/api\/notion/, '');
   const notionUrl = 'https://api.notion.com' + notionPath;
+
   const body = req.method !== 'GET' ? JSON.stringify(req.body) : undefined;
 
   const upstream = await fetch(notionUrl, {
