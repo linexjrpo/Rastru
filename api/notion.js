@@ -1,5 +1,4 @@
-// Vercel Serverless Function — Notion API Proxy (CommonJS)
-const TOKEN = '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';
+const TOKEN = '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';
 
 module.exports = async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -12,7 +11,6 @@ module.exports = async function handler(req, res) {
 
   const notionPath = req.url.replace(/^\/api\/notion/, '');
   const notionUrl = 'https://api.notion.com' + notionPath;
-
   const body = req.method !== 'GET' ? JSON.stringify(req.body) : undefined;
 
   const upstream = await fetch(notionUrl, {
