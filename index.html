@@ -901,7 +901,7 @@ var calcCScore=function(c){var s=0;if(c.name)s+=10;if(c.client)s+=8;if(c.celula)
 var getRoleLbl=function(r){return{admin:'Admin',editor:'Editor',viewer:'Viewer'}[r]||'Viewer'};
 var getRoleCls=function(r){return{admin:'role-admin',editor:'role-editor',viewer:'role-viewer'}[r]||'role-viewer'};
 var avatarColors=['linear-gradient(135deg,#5341CD,#F8A4D8)','linear-gradient(135deg,#006C4B,#60F9BD)','linear-gradient(135deg,#765300,#FFDEA8)','linear-gradient(135deg,#5341CD,#5B9BF5)','linear-gradient(135deg,#BA1A1A,#FFB4AB)'];
-var getAvatarColor=function(name){var code=name.charCodeAt(0)%avatarColors.length;return avatarColors[code]};
+var getAvatarColor=function(name){var code=(name||"A").charCodeAt(0)%avatarColors.length;return avatarColors[code]};
 
 function showToast(ico,msg,sub){
   var t=ge('toast');ge('tico').textContent=ico;ge('tmsg').textContent=msg;ge('tsub').textContent=sub||'';
@@ -1018,7 +1018,7 @@ function doLogout(){ge('app-shell').classList.remove('on');ge('app-shell').class
 function updateUserUI(){
   var u=CURRENT_USER;
   ge('sb-uname').textContent=u.firstName;
-  ge('hero-greeting').innerHTML='Bem-vinda'+('aeiouAEIOU'.includes(u.firstName[0])?'':'à')+', <em>'+u.firstName+'</em>';
+  if(ge('hero-greeting')&&u.firstName)ge('hero-greeting').innerHTML='Bem-vinda'+('aeiouAEIOU'.includes(u.firstName[0]||'x')?'':'à')+', <em>'+u.firstName+'</em>';
   ge('sb-uav').textContent=u.avatar;
   ge('sb-uav').style.background=getAvatarColor(u.firstName);
   ge('sb-role-badge').textContent='Usuário';
@@ -2159,10 +2159,9 @@ function dupCamp(campId){
 }
 
 /* Init on load — credentials pre-configured */
+/* Credentials pre-loaded — sync happens after login */
 notionSave('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', '346bcb0554b2800f8ca1cec10c8ec93f');
 notionLoad();
-showNotionStatus('syncing');
-notionSync(true);
 
 
 </script>
