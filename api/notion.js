@@ -1,3 +1,5 @@
+const TOKEN = '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';
+
 export const config = { runtime: 'edge' };
 
 export default async function handler(req) {
@@ -17,12 +19,10 @@ export default async function handler(req) {
   const notionUrl = 'https://api.notion.com' + notionPath + url.search;
   const body = req.method !== 'GET' ? await req.text() : undefined;
 
-  const token = process.env.NOTION_TOKEN || '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';
-
   const res = await fetch(notionUrl, {
     method: req.method,
     headers: {
-      'Authorization': 'Bearer ' + token,
+      'Authorization': 'Bearer ' + TOKEN,
       'Notion-Version': '2022-06-28',
       'Content-Type': 'application/json',
     },
