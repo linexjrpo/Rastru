@@ -5,7 +5,7 @@ module.exports = async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
   if (req.method === 'OPTIONS') return res.status(204).end();
 
-  const TOKEN = process.env.NOTION_TOKEN || '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';
+  const TOKEN = process.env.NOTION_TOKEN || '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';
 
   if (req.url && req.url.includes('/health')) {
     return res.status(200).json({ ok: true, tokenPrefix: TOKEN.slice(0,8)+'...', timestamp: new Date().toISOString() });
