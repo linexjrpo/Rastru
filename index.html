@@ -646,7 +646,7 @@ body.dev-view .dev-panel{display:block}
       </div>
     </div>
     
-    <button class="sb-notion-btn" onclick="openNotionSetup()" style="width:100%;margin-top:8px;background:none;border:1.5px solid var(--ov);border-radius:9999px;padding:9px 14px;font-size:10.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;cursor:pointer;color:var(--txv);font-family:var(--font);display:flex;align-items:center;gap:6px;justify-content:center;transition:all .14s" onmouseover="this.style.borderColor='var(--pu)';this.style.color='var(--pu)'" onmouseout="this.style.borderColor='var(--ov)';this.style.color='var(--txv)'"><span style="width:16px;height:16px;border-radius:4px;background:var(--tx);display:inline-flex;align-items:center;justify-content:center;color:var(--sf0);font-size:10px;font-weight:800;flex-shrink:0">N</span>Notion Sync</button>
+    <button class="sb-notion-btn" onclick="openNotionSetup()" style="width:100%;margin-top:8px;background:none;border:1.5px solid var(--ov);border-radius:9999px;padding:9px 14px;font-size:10.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;cursor:pointer;color:var(--txv);font-family:var(--font);display:flex;align-items:center;gap:6px;justify-content:center;transition:all .14s" onmouseover="this.style.borderColor='var(--pu)';this.style.color='var(--pu)'" onmouseout="this.style.borderColor='var(--ov)';this.style.color='var(--txv)'"><span style="width:16px;height:16px;border-radius:4px;background:var(--tx);display:inline-flex;align-items:center;justify-content:center;color:var(--sf0);font-size:10px;font-weight:800;flex-shrink:0">N</span>Sheets Sync</button>
 <button class="sb-btn" style="margin-top:8px" onclick="doLogout()"><span class="ms sm" style="vertical-align:middle;margin-right:3px">logout</span>Sair</button>
   </div>
 </aside>
@@ -1926,163 +1926,183 @@ function renderDemoStep(){
    RASTRU v6 — NOTION LAYER
 ══════════════════════════════════════ */
 
-var NOTION_CFG = { token: '', dbId: '', enabled: false };
+/* ── GOOGLE SHEETS SYNC ── */
+var GS_CFG = { url: '', enabled: false };
 
-function notionLoad() {
+function gsLoad() {
   try {
-    var s = localStorage.getItem('rastru_notion_cfg');
-    if (s) { var p = JSON.parse(s); NOTION_CFG.token = p.token || ''; NOTION_CFG.dbId = p.dbId || ''; NOTION_CFG.enabled = !!(p.token && p.dbId); }
+    var saved = localStorage.getItem('rastru_gs_url');
+    if (saved) { GS_CFG.url = saved; GS_CFG.enabled = true; }
   } catch(e) {}
 }
 
-function notionSave(t, d) {
-  NOTION_CFG.token = t; NOTION_CFG.dbId = d; NOTION_CFG.enabled = !!(t && d);
-  try { localStorage.setItem('rastru_notion_cfg', JSON.stringify({ token: t, dbId: d })); } catch(e) {}
+function gsSave(url) {
+  GS_CFG.url = url;
+  GS_CFG.enabled = !!url;
+  try { localStorage.setItem('rastru_gs_url', url); } catch(e) {}
 }
 
-function notionClear() {
-  NOTION_CFG = { token: '', dbId: '', enabled: false };
-  try { localStorage.removeItem('rastru_notion_cfg'); } catch(e) {}
+function gsClear() {
+  GS_CFG = { url: '', enabled: false };
+  try { localStorage.removeItem('rastru_gs_url'); } catch(e) {}
 }
 
-function notionFetch(path, method, body) {
-  var url = '/api/notion/v1' + path;
-  var opts = { method: method || 'GET', headers: { 'Content-Type': 'application/json' } };
-  if (body) opts.body = JSON.stringify(body);
-  return fetch(url, opts).then(function(r) { if (!r.ok) throw new Error(r.status); return r; });
+/* Fetch all camps from sheet */
+function gsLoadCamps(cb) {
+  if (!GS_CFG.enabled || !GS_CFG.url) return;
+  showSyncStatus('syncing');
+  fetch(GS_CFG.url + '?action=load')
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      if (data.camps && data.camps.length > 0) {
+        camps = data.camps.map(function(c) {
+          c.id = c.id || Date.now();
+          return c;
+        });
+        if (typeof rDash === 'function') rDash();
+        if (typeof rRepo === 'function' && pg === 'repository') rRepo();
+      }
+      showSyncStatus('ok');
+      if (cb) cb(data.camps || []);
+    })
+    .catch(function(err) {
+      console.error('[Rastru] gsLoadCamps error:', err);
+      showSyncStatus('error');
+    });
 }
 
-function notionPageToCamp(page) {
-  var p = page.properties || {};
-  var gt = function(k) { try { return (p[k].rich_text || p[k].title || [])[0].plain_text || ''; } catch(e) { return ''; } };
-  var gs = function(k) { try { return p[k].select.name || ''; } catch(e) { return ''; } };
-  var gm = function(k) { try { return p[k].multi_select.map(function(x) { return x.name; }); } catch(e) { return []; } };
-  var gd = function(k) { try { return (p[k].date.start || '').slice(0, 10); } catch(e) { return ''; } };
-  var gj = function(k) { try { var v = gt(k); return v ? JSON.parse(v) : []; } catch(e) { return []; } };
-  return {
-    id: page.id, notionId: page.id,
-    name: gt('Name') || 'Sem nome', client: gt('Cliente'), celula: gt('Celula'),
-    status: gs('Status') || 'active', lc: gs('Ciclo de Vida') || 'rascunho', type: 'whatsapp',
-    result: gs('Resultado') || 'partial', privacy: gs('Privacidade') || 'public',
-    ds: gs('Fonte de Dados') || 'manual',
-    start: gd('Data Inicio'), end: gd('Data Fim'),
-    objective: gt('Objetivo'), pain: gt('Dor'), successDef: gt('Definicao de Sucesso'),
-    journey: gt('Jornada'), notes: gt('Notas'), createdBy: gt('Criado Por'),
-    entries: gm('Entry Points'), tags: gm('Tags'), integrations: gm('Integracoes'),
-    squad: gj('Squad'), kpis: gj('KPIs'), works: gj('O Que Funcionou'),
-    didnt: gj('O Que Nao Funcionou'), opps: gj('Oportunidades'),
-    materials: gj('Materiais'), versions: gj('Versoes'),
-    createdAt: (page.created_time || '').slice(0, 10) || new Date().toISOString().slice(0, 10)
-  };
-}
-
-function campToNotionProps(c) {
-  function rt(t) { return [{ type: 'text', text: { content: String(t || '').slice(0, 2000) } }]; }
-  function jrt(a) { return rt(JSON.stringify(a || [])); }
-  return {
-    'Name': { title: rt(c.name) },
-    'Cliente': { rich_text: rt(c.client || '') },
-    'Celula': { rich_text: rt(c.celula || '') },
-    'Status': { select: { name: c.status || 'active' } },
-    'Ciclo de Vida': { select: { name: c.lc || 'rascunho' } },
-    'Resultado': { select: { name: c.result || 'partial' } },
-    'Privacidade': { select: { name: c.privacy || 'public' } },
-    'Fonte de Dados': { select: { name: c.ds || 'manual' } },
-    'Data Inicio': c.start ? { date: { start: c.start } } : { date: null },
-    'Data Fim': c.end ? { date: { start: c.end } } : { date: null },
-    'Objetivo': { rich_text: rt(c.objective || '') },
-    'Dor': { rich_text: rt(c.pain || '') },
-    'Definicao de Sucesso': { rich_text: rt(c.successDef || '') },
-    'Jornada': { rich_text: rt(c.journey || '') },
-    'Notas': { rich_text: rt(c.notes || '') },
-    'Criado Por': { rich_text: rt(c.createdBy || '') },
-    'Entry Points': { multi_select: (c.entries || []).map(function(e) { return { name: e }; }) },
-    'Tags': { multi_select: (c.tags || []).map(function(t) { return { name: t }; }) },
-    'Integracoes': { multi_select: (c.integrations || []).map(function(i) { return { name: i }; }) },
-    'Squad': { rich_text: jrt(c.squad) },
-    'KPIs': { rich_text: jrt(c.kpis) },
-    'O Que Funcionou': { rich_text: jrt(c.works) },
-    'O Que Nao Funcionou': { rich_text: jrt(c.didnt) },
-    'Oportunidades': { rich_text: jrt(c.opps) },
-    'Materiais': { rich_text: jrt(c.materials) },
-    'Versoes': { rich_text: jrt((c.versions || []).slice(0, 20)) }
-  };
-}
-
-var notionSyncing = false;
-
-function notionSync(silent) {
-  if (!NOTION_CFG.enabled) return Promise.resolve();
-  if (notionSyncing) return Promise.resolve();
-  notionSyncing = true;
-  if (!silent) showNotionStatus('syncing');
-  return notionFetch('/databases/' + NOTION_CFG.dbId + '/query', 'POST', {
-    sorts: [{ timestamp: 'created_time', direction: 'descending' }],
-    page_size: 100
+/* Save single camp to sheet */
+function gsSaveCamp(camp) {
+  if (!GS_CFG.enabled || !GS_CFG.url) return;
+  fetch(GS_CFG.url + '?action=save', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(camp)
   })
   .then(function(r) { return r.json(); })
   .then(function(data) {
-    if (data.results) {
-      var remote = data.results.map(notionPageToCamp);
-      var localOnly = camps.filter(function(c) { return !c.notionId; });
-      camps = remote.concat(localOnly);
-      showNotionStatus('ok', remote.length + ' campanhas');
-      if (pg === 'dashboard') rDash();
-      if (pg === 'repository') rRepo();
-      if (pg === 'detail' && detId) rDet(detId);
-    }
+    if (!data.ok) console.warn('[Rastru] gsSaveCamp failed:', data);
+    showSyncStatus('ok');
   })
-  .catch(function() { showNotionStatus('error', 'Offline — dados locais'); })
-  .finally(function() { notionSyncing = false; });
-}
-
-function notionCreate(c) {
-  if (!NOTION_CFG.enabled) return Promise.resolve(c);
-  return notionFetch('/pages', 'POST', {
-    parent: { database_id: NOTION_CFG.dbId },
-    properties: campToNotionProps(c)
-  })
-  .then(function(r) { return r.json(); })
-  .then(function(page) {
-    c.notionId = page.id;
-    c.id = page.id;
-    showNotionStatus('ok', 'Salvo no Notion');
-    return c;
-  })
-  .catch(function() {
-    showToast('⚠️', 'Notion offline', 'Campanha salva localmente');
-    return c;
+  .catch(function(err) {
+    console.error('[Rastru] gsSaveCamp error:', err);
+    showSyncStatus('error');
   });
 }
 
-function notionUpdate(c) {
-  if (!NOTION_CFG.enabled || !c.notionId) return Promise.resolve();
-  return notionFetch('/pages/' + c.notionId, 'PATCH', { properties: campToNotionProps(c) })
-    .then(function() { showNotionStatus('ok', 'Sincronizado'); })
-    .catch(function() { showToast('⚠️', 'Sync pendente', 'Será sincronizado em breve'); });
+/* Delete camp from sheet */
+function gsDeleteCamp(id) {
+  if (!GS_CFG.enabled || !GS_CFG.url) return;
+  fetch(GS_CFG.url + '?action=delete&id=' + id)
+    .then(function(r) { return r.json(); })
+    .catch(function(err) { console.error('[Rastru] gsDeleteCamp error:', err); });
 }
 
-function showNotionStatus(state, msg) {
-  var el = ge('notion-status');
+/* Test the Apps Script URL */
+function gsTestAndSave() {
+  var urlEl = ge('gs-url-input');
+  var errEl = ge('gs-err');
+  var btn   = ge('gs-save-btn');
+  if (!urlEl || !errEl) return;
+
+  var url = (urlEl.value || '').trim();
+  errEl.style.display = 'none';
+
+  if (!url || !url.startsWith('https://script.google.com/')) {
+    errEl.textContent = 'URL inválida. Deve começar com https://script.google.com/';
+    errEl.style.display = 'block';
+    return;
+  }
+
+  btn.textContent = 'Testando…';
+  btn.disabled = true;
+
+  fetch(url + '?action=health')
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      if (data.ok) {
+        gsSave(url);
+        btn.textContent = 'Conectado ✓';
+        btn.style.background = 'var(--gn)';
+        btn.disabled = false;
+        showSyncStatus('ok');
+        showToast('✅', 'Google Sheets conectado!', 'Carregando campanhas…');
+        setTimeout(function() {
+          closeGsSetup();
+          gsLoadCamps();
+        }, 800);
+      } else {
+        throw new Error(data.error || 'Resposta inválida');
+      }
+    })
+    .catch(function(err) {
+      errEl.textContent = 'Falha: ' + err.message + '. Verifique se publicou como Web App com acesso "Anyone".';
+      errEl.style.display = 'block';
+      btn.textContent = 'Salvar e Conectar';
+      btn.disabled = false;
+    });
+}
+
+function showSyncStatus(state) {
+  var el = ge('sync-status-pill');
   if (!el) return;
-  var icons = { syncing: '⟳', ok: '●', error: '⚠', off: '○' };
-  var colors = { syncing: 'var(--yw)', ok: 'var(--gn)', error: 'var(--rd)', off: 'var(--txv)' };
-  var label = msg || { syncing: 'Sincronizando…', ok: 'Notion conectado', error: 'Offline', off: 'Modo local' }[state];
-  var spin = state === 'syncing' ? 'animation:spin 1s linear infinite;' : '';
-  el.innerHTML = '<span style="color:' + colors[state] + ';font-size:11px;display:inline-block;' + spin + '">' + icons[state] + '</span>' +
-    '<span style="font-size:10px;color:var(--txv);opacity:.6;margin-left:4px">' + label + '</span>';
+  var states = {
+    ok:      { bg: 'rgba(0,108,75,.12)', color: 'var(--gn)', dot: 'var(--gn)', text: 'Sheets sincronizado' },
+    syncing: { bg: 'rgba(83,65,205,.1)', color: 'var(--pu)', dot: 'var(--pu)', text: 'Sincronizando…' },
+    error:   { bg: 'rgba(186,26,26,.1)', color: 'var(--rd)', dot: 'var(--rd)', text: 'Erro na sincronização' },
+    off:     { bg: 'var(--sfl)',         color: 'var(--txv)',dot: 'rgba(0,0,0,.2)', text: 'Offline' }
+  };
+  var s = states[state] || states.off;
+  el.style.background = s.bg;
+  el.innerHTML = '<span style="width:6px;height:6px;border-radius:50%;background:' + s.dot + ';' + (state==='syncing'?'animation:lp 1s infinite':'') + '"></span><span style="font-size:11px;font-weight:600;color:' + s.color + '">' + s.text + '</span>';
 }
 
-function openNotionSetup() {
-  var modal = ge('notion-setup-modal');
-  if (!modal) { alert('Modal não encontrado'); return; }
-  modal.classList.add('show');
-  var tokenEl = ge('ns-token');
-  var dbEl = ge('ns-dbid');
-  if (tokenEl) tokenEl.value = NOTION_CFG.token || '';
-  if (dbEl) dbEl.value = NOTION_CFG.dbId || '';
-  updateSetupStatus();
+function openGsSetup() {
+  var modal = ge('gs-setup-modal');
+  if (modal) {
+    modal.style.display = 'flex';
+    var urlEl = ge('gs-url-input');
+    if (urlEl && GS_CFG.url) urlEl.value = GS_CFG.url;
+    updateGsStatus();
+  }
 }
+
+function closeGsSetup() {
+  var modal = ge('gs-setup-modal');
+  if (modal) modal.style.display = 'none';
+}
+
+function updateGsStatus() {
+  var el = ge('gs-status-row');
+  if (!el) return;
+  if (GS_CFG.enabled) {
+    el.innerHTML = '<div style="display:flex;align-items:center;gap:6px;padding:10px 14px;background:rgba(0,108,75,.08);border-radius:10px;border:1px solid rgba(0,108,75,.2)"><span style="width:7px;height:7px;border-radius:50%;background:var(--gn)"></span><span style="font-size:12px;font-weight:600;color:var(--gn)">Sheets conectado e ativo</span></div>';
+  } else {
+    el.innerHTML = '<div style="font-size:12px;color:var(--txv);opacity:.5;padding:8px 0">Não conectado — dados salvos localmente</div>';
+  }
+}
+
+function gsDisconnect() {
+  gsClear();
+  updateGsStatus();
+  showSyncStatus('off');
+  showToast('○', 'Desconectado', 'Usando dados locais.');
+}
+
+/* Legacy Notion stubs — manter compatibilidade com código existente */
+var NOTION_CFG = { token: '', dbId: '', enabled: false };
+function notionLoad() { gsLoad(); }
+function notionSync(silent) { gsLoadCamps(); }
+function notionCreate(camp) { gsSaveCamp(camp); }
+function notionUpdate(camp) { gsSaveCamp(camp); }
+function notionSave(t, d) {}
+function notionClear() { gsDisconnect(); }
+function showNotionStatus(s) { showSyncStatus(s); }
+function openNotionSetup() { openGsSetup(); }
+function closeNotionSetup() { closeGsSetup(); }
+function testAndSaveNotion() { gsTestAndSave(); }
+function updateSetupStatus() { updateGsStatus(); }
+function disconnectNotion() { gsDisconnect(); }
 
 function closeNotionSetup() {
   var modal = ge('notion-setup-modal');
@@ -2411,54 +2431,75 @@ function toggleNotify(campId, val){
 }
 
 /* Init on load — credentials pre-configured */
-/* Credentials loaded from localStorage only */
-notionLoad();
+/* Load Google Sheets config */
+gsLoad();
 
 
 
 </script>
 
 <!-- NOTION STATUS PILL -->
-<div id="notion-status" style="position:fixed;bottom:80px;right:24px;display:none;align-items:center;gap:6px;background:var(--sf0);border:0.5px solid var(--ov);border-radius:9999px;padding:5px 13px;cursor:pointer;z-index:88;box-shadow:var(--sh);font-family:var(--font)" onclick="openNotionSetup()" title="Configurar Notion"></div>
+<div id="sync-status-pill" style="position:fixed;bottom:80px;right:24px;display:none;align-items:center;gap:6px;background:var(--sf0);border:0.5px solid var(--ov);border-radius:9999px;padding:5px 13px;cursor:pointer;z-index:88;box-shadow:var(--sh);font-family:var(--font)" onclick="openNotionSetup()" title="Configurar Notion"></div>
 
 <!-- NOTION SETUP MODAL -->
-<div id="notion-setup-modal" style="position:fixed;inset:0;background:rgba(22,23,43,.55);z-index:7500;display:flex;align-items:center;justify-content:center;padding:22px;opacity:0;pointer-events:none;transition:opacity .26s ease" onclick="if(event.target===this)closeNotionSetup()">
-  <div onclick="event.stopPropagation()" style="background:var(--sf0);border-radius:22px;width:100%;max-width:580px;box-shadow:0 24px 80px rgba(22,23,43,.26);overflow:hidden">
-    <div style="background:linear-gradient(135deg,#1A1A2E,#16213E,#0F3460);padding:22px 26px;display:flex;align-items:center;gap:14px">
-      <div style="width:42px;height:42px;border-radius:12px;background:rgba(255,255,255,.12);display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:18px;font-weight:800;color:#fff">N</div>
-      <div style="flex:1"><div style="font-size:16px;font-weight:800;color:#fff;letter-spacing:-.3px">Conectar ao Notion</div><div style="font-size:11.5px;color:rgba(255,255,255,.55);margin-top:2px">Banco de dados permanente e compartilhado para suas campanhas</div></div>
-      <button onclick="closeNotionSetup()" style="background:rgba(255,255,255,.12);border:none;cursor:pointer;color:#fff;width:28px;height:28px;border-radius:9999px;font-size:13px;font-weight:700;display:flex;align-items:center;justify-content:center">✕</button>
+<div id="gs-setup-modal" style="position:fixed;inset:0;background:rgba(10,10,20,.7);backdrop-filter:blur(8px);z-index:9100;display:none;align-items:center;justify-content:center;padding:20px">
+  <div style="background:var(--sf0);border:1px solid var(--ov);border-radius:20px;width:100%;max-width:520px;padding:28px;box-shadow:0 24px 64px rgba(0,0,0,.4)">
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px">
+      <div style="width:40px;height:40px;border-radius:12px;background:rgba(0,168,88,.12);display:flex;align-items:center;justify-content:center">
+        <span style="font-size:20px">📊</span>
+      </div>
+      <div>
+        <div style="font-size:15px;font-weight:800;letter-spacing:-.3px">Conectar ao Google Sheets</div>
+        <div style="font-size:11.5px;color:var(--txv);opacity:.6">Banco de dados permanente para suas campanhas</div>
+      </div>
+      <button onclick="closeGsSetup()" style="margin-left:auto;background:none;border:none;cursor:pointer;color:var(--txv);font-size:20px;padding:4px;opacity:.5">×</button>
     </div>
-    <div style="padding:24px 26px">
-      <div id="ns-status" style="margin-bottom:16px"></div>
-      <div style="background:var(--sfl);border-radius:14px;padding:14px 17px;margin-bottom:18px">
-        <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--txv);opacity:.5;margin-bottom:10px">Como configurar em 3 passos</div>
-        <div style="display:flex;flex-direction:column;gap:10px">
-          <div style="display:flex;gap:11px;align-items:flex-start;font-size:12.5px;color:var(--txv)"><span style="width:20px;height:20px;border-radius:9999px;background:var(--pu);color:#fff;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:800;flex-shrink:0">1</span><div>Acesse <strong style="color:var(--pu)">notion.so/my-integrations</strong> → crie integração "Rastru" → copie o <strong>Internal Integration Token</strong></div></div>
-          <div style="display:flex;gap:11px;align-items:flex-start;font-size:12.5px;color:var(--txv)"><span style="width:20px;height:20px;border-radius:9999px;background:var(--pu);color:#fff;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:800;flex-shrink:0">2</span><div>Crie um Database no Notion com as propriedades listadas abaixo. Clique em "..." → "Connect to" → selecione "Rastru". Copie o <strong>Database ID</strong> da URL</div></div>
-          <div style="display:flex;gap:11px;align-items:flex-start;font-size:12.5px;color:var(--txv)"><span style="width:20px;height:20px;border-radius:9999px;background:var(--pu);color:#fff;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:800;flex-shrink:0">3</span><div>Cole token e ID abaixo → clique <strong>Salvar e Conectar</strong></div></div>
+
+    <div id="gs-status-row" style="margin-bottom:16px"></div>
+
+    <div style="background:var(--sfl);border-radius:14px;padding:16px;margin-bottom:16px;font-size:12px;color:var(--txv)">
+      <div style="font-weight:700;margin-bottom:10px;font-size:11px;text-transform:uppercase;letter-spacing:.08em;opacity:.5">Como configurar em 3 passos</div>
+      <div style="display:flex;flex-direction:column;gap:9px">
+        <div style="display:flex;gap:10px;align-items:flex-start">
+          <div style="width:20px;height:20px;border-radius:50%;background:var(--pu);color:#fff;font-size:10px;font-weight:800;display:flex;align-items:center;justify-content:center;flex-shrink:0">1</div>
+          <div>Crie uma planilha no <strong>Google Drive</strong> → abra o <strong>Apps Script</strong> (Extensões → Apps Script)</div>
         </div>
-        <button onclick="createNotionTemplate()" style="margin-top:12px;background:none;border:1px solid var(--ov);border-radius:9999px;padding:6px 14px;font-size:11.5px;color:var(--pu);cursor:pointer;font-family:var(--font)">Ver lista de propriedades necessárias →</button>
-        <div id="ns-props-panel" style="display:none;margin-top:12px;max-height:180px;overflow-y:auto"><div id="ns-prop-list"></div></div>
-      </div>
-      <div style="margin-bottom:13px"><label style="font-size:11px;font-weight:700;color:var(--txv);display:block;margin-bottom:5px">Integration Token</label><input id="ns-token" type="password" class="fc" placeholder="secret_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" autocomplete="off"></div>
-      <div style="margin-bottom:13px"><label style="font-size:11px;font-weight:700;color:var(--txv);display:block;margin-bottom:5px">Database ID</label><input id="ns-dbid" class="fc" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" autocomplete="off"></div>
-      <div id="ns-err" style="display:none;font-size:12px;color:var(--rd);padding:8px 12px;background:var(--rdc);border-radius:9px;margin-bottom:12px"></div>
-      <div style="display:flex;gap:8px;justify-content:space-between;align-items:center">
-        <button onclick="disconnectNotion()" style="background:none;border:1px solid var(--ov);border-radius:9999px;padding:7px 14px;font-size:12px;color:var(--rd);cursor:pointer;font-family:var(--font)">Desconectar</button>
-        <div style="display:flex;gap:8px">
-          <button onclick="closeNotionSetup()" class="btn btn-t btn-sm">Cancelar</button>
-          <button id="ns-save-btn" onclick="testAndSaveNotion()" class="btn btn-f btn-sm"><span class="ms sm">sync</span>Salvar e Conectar</button>
+        <div style="display:flex;gap:10px;align-items:flex-start">
+          <div style="width:20px;height:20px;border-radius:50%;background:var(--pu);color:#fff;font-size:10px;font-weight:800;display:flex;align-items:center;justify-content:center;flex-shrink:0">2</div>
+          <div>Cole o código do Apps Script → <strong>Deploy → New deployment → Web App</strong> → Execute as: <em>Me</em> → Access: <em>Anyone</em></div>
+        </div>
+        <div style="display:flex;gap:10px;align-items:flex-start">
+          <div style="width:20px;height:20px;border-radius:50%;background:var(--pu);color:#fff;font-size:10px;font-weight:800;display:flex;align-items:center;justify-content:center;flex-shrink:0">3</div>
+          <div>Cole a <strong>URL do Web App</strong> abaixo e clique em Salvar</div>
         </div>
       </div>
-      <div style="margin-top:16px;padding:11px 13px;background:rgba(83,65,205,.06);border-radius:10px;border:1px solid var(--pfd);font-size:11.5px;color:var(--txv);line-height:1.55"><span class="ms sm fill" style="color:var(--pu);font-size:13px;vertical-align:middle;margin-right:5px">info</span>O token fica salvo apenas no <strong>localStorage</strong> do seu navegador. Para uso em equipe, cada membro configura seu próprio token com acesso ao mesmo database.</div>
+    </div>
+
+    <div style="margin-bottom:10px">
+      <label style="font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--txv);opacity:.5;display:block;margin-bottom:6px">URL do Web App</label>
+      <input id="gs-url-input" class="fc" type="url" placeholder="https://script.google.com/macros/s/..." style="width:100%;box-sizing:border-box">
+    </div>
+
+    <div id="gs-err" class="login-err" style="display:none;margin-bottom:10px"></div>
+
+    <div style="display:flex;gap:8px;justify-content:space-between;align-items:center;margin-top:4px">
+      <button onclick="gsDisconnect()" class="btn btn-t btn-sm" style="color:var(--rd)">Desconectar</button>
+      <div style="display:flex;gap:8px">
+        <button onclick="closeGsSetup()" class="btn btn-t btn-sm">Cancelar</button>
+        <button id="gs-save-btn" onclick="gsTestAndSave()" class="btn btn-f btn-sm">Salvar e Conectar</button>
+      </div>
+    </div>
+
+    <div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--ov);font-size:10.5px;color:var(--txv);opacity:.45;line-height:1.5">
+      <span class="ms sm fill" style="font-size:12px;vertical-align:middle;margin-right:4px">info</span>
+      A URL fica salva no <strong>localStorage</strong> do navegador. Cada membro configura a sua própria URL apontando para a mesma planilha.
     </div>
   </div>
 </div>
 
 
 <!-- NOTION STATUS PILL -->
-<div id="notion-status" style="position:fixed;bottom:80px;right:24px;display:none;align-items:center;gap:6px;background:var(--sf0);border:0.5px solid var(--ov);border-radius:9999px;padding:5px 13px;cursor:pointer;z-index:88;box-shadow:var(--sh);font-family:var(--font)" onclick="openNotionSetup()" title="Configurar Notion"></div>
+<div id="sync-status-pill" style="position:fixed;bottom:80px;right:24px;display:none;align-items:center;gap:6px;background:var(--sf0);border:0.5px solid var(--ov);border-radius:9999px;padding:5px 13px;cursor:pointer;z-index:88;box-shadow:var(--sh);font-family:var(--font)" onclick="openNotionSetup()" title="Configurar Notion"></div>
 
 <!-- NOTION SETUP MODAL -->
 <div id="notion-setup-modal" style="position:fixed;inset:0;background:rgba(22,23,43,.55);z-index:9500;display:flex;align-items:center;justify-content:center;padding:22px;opacity:0;pointer-events:none;transition:opacity .26s ease" onclick="if(event.target===this)closeNotionSetup()">
