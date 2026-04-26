@@ -1,6 +1,5 @@
 // Vercel Serverless Function — Notion API Proxy
-// Token via env var NOTION_TOKEN (primary) ou fallback hardcoded
-// Internal Integration tokens NÃO expiram — são permanentes
+// Token via env var (produção) ou fallback hardcoded
 
 module.exports = async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -9,10 +8,8 @@ module.exports = async function handler(req, res) {
 
   if (req.method === 'OPTIONS') return res.status(204).end();
 
-  // Token: env var tem prioridade, fallback hardcoded
-  const TOKEN = process.env.NOTION_TOKEN || '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';
+  const TOKEN = process.env.NOTION_TOKEN || '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';
 
-  // Health check
   if (req.url && req.url.includes('/health')) {
     return res.status(200).json({
       ok: true,
@@ -53,7 +50,7 @@ module.exports = async function handler(req, res) {
         _diagnostic: {
           tokenPrefix: TOKEN.slice(0, 8) + '...',
           tokenLength: TOKEN.length,
-          hint: 'Verifique: (1) workspace correta, (2) integração não deletada, (3) database compartilhado via Connect to'
+          hint: 'Token inválido — verifique workspace e database compartilhado'
         }
       });
     }
