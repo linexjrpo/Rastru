@@ -832,6 +832,7 @@ body.dev-view .dev-panel{display:block}
 
 
 <script>
+
 /* ═══════════════════════════════════════
    RASTRU v5 — FULL JS
 ═══════════════════════════════════════ */
@@ -926,9 +927,11 @@ function setMemberPass(email,pass){
 }
 
 function checkOwnerEmail(em){
-  var isOwner=OWNERS.some(function(u){return u.email===em.trim().toLowerCase()});
+  var e=em.trim().toLowerCase();
+  var isOwner=OWNERS.some(function(u){return u.email===e;});
+  var hasSavedPass=!!getMemberPass(e);
   var pf=ge('pass-field');
-  if(pf)pf.style.display=isOwner?'block':'none';
+  if(pf)pf.style.display=(isOwner||hasSavedPass)?'block':'none';
 }
 
 function doLogin(){
@@ -950,25 +953,12 @@ function doLogin(){
     return;
   }
 
-  // Member: must be @blip.ai
-  if(!em.endsWith('@blip.ai')){
-    err.textContent='Use seu e-mail @blip.ai para entrar.';
-    err.style.display='block';ge('login-email').classList.add('err');return;
-  }
-
-  // Check if member has registered a password
+  // Member: @blip.ai required + password
   var savedPass=getMemberPass(em);
-  if(!savedPass){
-    // First access — show register screen
-    showRegisterScreen(em);
-    return;
-  }
-
-  // Has password — require it
-  var pf=ge('pass-field');if(pf)pf.style.display='block';
-  if(!pw){err.textContent='Informe sua senha.';err.style.display='block';return;}
-  if(pw!==savedPass){err.textContent='Senha incorreta.';err.style.display='block';return;}
-
+  if(!savedPass){showRegisterScreen(em);return;}
+  var pf2=ge('pass-field');if(pf2)pf2.style.display='block';
+  if(!pw){ge('login-err').textContent='Informe sua senha.';ge('login-err').style.display='block';return;}
+  if(pw!==savedPass){ge('login-err').textContent='Senha incorreta.';ge('login-err').style.display='block';return;}
   var firstName=em.split('@')[0].split('.').map(function(w){return w.charAt(0).toUpperCase()+w.slice(1)}).join(' ');
   loginSuccess(firstName,firstName,em,false);
 }
@@ -1065,7 +1055,7 @@ function goTo(p,id){
   var nav=ge('nav-'+p);if(nav)nav.classList.add('on');
   pg=p;
   if(p==='new'){
-    ws=0;wd={type:'whatsapp',entries:[],celula:'',privacy:'public',ds:'manual',squad:[],tags:[],kpis:[],files:[],links:[],ints:[],result:'success',lc:'rascunho',status:'active'};rWiz();
+    ws=0;wd={type:'whatsapp',entries:[],celula:'',privacy:'public',ds:'manual',squad:[],tags:[],kpis:[],files:[],links:[],ints:[],result:'success',lc:'rascunho',status:'active',notifyOnClose:true};rWiz();
   }
   if(p==='detail'&&id){detId=id;rDet(id);}
   if(p==='dashboard')rDash();
@@ -1348,7 +1338,7 @@ function mkCamp(){
   var already=sq.some(function(s){return s.email===creatorEmail});
   if(!already){sq.unshift({name:CURRENT_USER.firstName,role:'Criador(a)',email:creatorEmail,permission:'admin',id:Date.now()});}
   else{sq=sq.map(function(s){return s.email===creatorEmail?Object.assign({},s,{permission:'admin'}):s;});}
-  var nc={id:Date.now(),name:wd.name||'Nova Campanha',client:wd.client||'Sem cliente',status:wd.status||'active',lc:wd.lc||'rascunho',type:'whatsapp',entries:wd.entries||[],celula:wd.celula||'',result:wd.result||'partial',privacy:wd.privacy||'public',ds:wd.ds||'manual',start:wd.start||'',end:wd.end||'',objective:wd.objective||'',pain:wd.pain||'',successDef:wd.successDef||'',journey:wd.journey||'',squad:sq,tags:wd.tags||[],kpis:wd.kpis||[],integrations:wd.ints||[],materials:(wd.files||[]).map(function(f){return{name:f.name,size:f.size,ico:'📄'};}),notes:wd.notes||'',works:[],didnt:[],opps:[],links:wd.links||[],createdAt:new Date().toISOString().slice(0,10),createdBy:creatorEmail,versions:[]};
+  var nc={id:Date.now(),name:wd.name||'Nova Campanha',client:wd.client||'Sem cliente',status:wd.status||'active',lc:wd.lc||'rascunho',type:'whatsapp',entries:wd.entries||[],celula:wd.celula||'',result:wd.result||'partial',privacy:wd.privacy||'public',ds:wd.ds||'manual',start:wd.start||'',end:wd.end||'',objective:wd.objective||'',pain:wd.pain||'',successDef:wd.successDef||'',journey:wd.journey||'',squad:sq,tags:wd.tags||[],kpis:wd.kpis||[],integrations:wd.ints||[],materials:(wd.files||[]).map(function(f){return{name:f.name,size:f.size,ico:'📄'};}),notes:wd.notes||'',notifyOnClose:wd.notifyOnClose!==false,works:[],didnt:[],opps:[],links:wd.links||[],createdAt:new Date().toISOString().slice(0,10),createdBy:creatorEmail,versions:[]};
   camps.unshift(nc);ws=5;rWiz();
   showToast('◈','Rastro registrado!','Você é admin de "'+nc.name+'".');
   if(nc.lc==='finalizada')setTimeout(function(){triggerNotif(nc)},1100);
@@ -1441,158 +1431,368 @@ function getWS(s){
 }
 
 /* ── DETAIL ── */
-function rDet(id){
-  var c=camps.find(function(x){return x.id==id});if(!c)return;
-  if(!canSee(c)){ge('det').innerHTML='<button class="bb" onclick="goTo(\'dashboard\')"><span class="ms sm">arrow_back</span>Voltar</button><div style="text-align:center;padding:56px;"><div style="font-size:36px;margin-bottom:12px">🔒</div><div style="font-size:16px;font-weight:700;margin-bottom:5px">Acesso restrito</div><div style="font-size:12.5px;color:var(--txv)">Esta campanha é Squad. Apenas membros podem visualizá-la.</div></div>';return;}
-  var isFin=c.lc==='finalizada';
-  var userPerm='viewer';
-  var sqMatch=(c.squad||[]).find(function(s){return s.name===CURRENT_USER.firstName});
-  if(sqMatch)userPerm=sqMatch.permission;
-  if(CURRENT_USER.role==='admin')userPerm='admin';
-  var editAllowed=canEditCamp(c);
 
-  ge('det').innerHTML=
-    '<button class="bb" onclick="goTo(\'dashboard\')"><span class="ms sm">arrow_back</span>Voltar</button>'+
-    '<div style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:20px">'+
-    '<div><div class="sey"><span class="sey-t">Ver rastro da campanha</span></div>'+
-    '<div class="det-t">'+c.name+'</div>'+
-    '<div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center">'+
-    '<span class="chip">'+c.client+'</span>'+(c.celula?'<span class="chip">'+c.celula+'</span>':'')+
-    '<span class="chip"><span class="ms sm fill" style="font-size:12px">chat</span>WhatsApp</span>'+
-    sBadge(c.status)+pBadge(c.privacy)+
-    (c.entries||[]).map(function(e){return'<span class="chtag entry">'+e+'</span>'}).join('')+
-    (c.tags||[]).map(function(t){return'<span class="chtag">'+t+'</span>'}).join('')+
-    '</div></div>'+
-    '<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:flex-start">'+
-    (!editAllowed?'<span class="perm-tip"><span class="ms sm fill" style="font-size:12px">lock</span>Apenas leitura</span>':'')+
-    '<button class="btn btn-t btn-sm" onclick="dupCamp('+c.id+')"><span class="ms sm">content_copy</span>Duplicar</button>'+(isAdminOfCamp?'<button class="btn btn-warn btn-sm" onclick="deleteCamp('+c.id+')"><span class="ms sm">delete</span>Excluir</button>':'')+<button class="btn btn-g btn-sm" onclick="openAudPicker(camps.find(function(x){return x.id=='+c.id+'}))"><span class="ms sm fill">slideshow</span>Briefing PPT</button>'+ 
-    (editAllowed?'<button class="btn btn-t btn-sm"><span class="ms sm">edit</span>Editar</button>':'')+ 
-    '<button class="btn btn-t btn-sm" onclick="dupCamp('+c.id+')"><span class="ms sm">content_copy</span>Duplicar</button>'+
-    '</div></div>'+
+function rDet(id) {
+  var c = camps.find(function(x) { return x.id == id; });
+  var el = ge('det');
+  if (!el) return;
 
-    (c.squad&&c.squad.length?'<div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin-bottom:14px">'+
-    '<span style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--txv);opacity:.45">Squad:</span>'+
-    c.squad.map(function(s){return'<div class="sq-pill" title="'+s.email+' — '+getRoleLbl(s.permission)+'"><div class="sq-av" style="background:'+getAvatarColor(s.name)+'">'+s.name[0].toUpperCase()+'</div><span>'+s.name+'</span><span style="font-size:9px;opacity:.5">'+s.role+'</span><span class="role-badge '+getRoleCls(s.permission)+'">'+getRoleLbl(s.permission)+'</span></div>'}).join('')+
-    '</div>':'')+
+  // ── Guard: camp not found
+  if (!c) {
+    el.innerHTML = [
+      '<button class="bb" onclick="goTo(\'dashboard\')"><span class="ms sm">arrow_back</span>Voltar</button>',
+      '<div class="ssc"><span class="si">🔍</span><div class="st">Campanha não encontrada</div>',
+      '<div class="ss2">O rastro pode ter sido removido ou sincronizado.</div>',
+      '<button class="btn btn-f" onclick="goTo(\'dashboard\')">Voltar ao Dashboard</button></div>'
+    ].join('');
+    return;
+  }
 
-    '<div style="display:flex;align-items:center;gap:7px;margin-bottom:16px">'+
-    '<span style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--txv);opacity:.45">Fonte:</span>'+
-    '<span style="display:inline-flex;align-items:center;gap:4px;padding:2px 9px;border-radius:9999px;font-size:11px;font-weight:600;background:'+(c.ds==='manual'?'var(--sfc)':'rgba(0,108,75,.1)')+';color:'+(c.ds==='manual'?'var(--txv)':'var(--gn)')+';border:1px solid '+(c.ds==='manual'?'var(--ov)':'rgba(0,108,75,.2)')+'">'+
-    '<span class="ms sm fill" style="font-size:12px">'+dsIco(c.ds)+'</span>'+dsLbl(c.ds)+'</span>'+
-    (c.integrations&&c.integrations.length?'<span style="display:inline-flex;align-items:center;gap:4px;padding:2px 9px;border-radius:9999px;font-size:11px;font-weight:600;background:rgba(0,108,75,.07);color:var(--gn);border:1px solid rgba(0,108,75,.16)"><span style="width:5px;height:5px;border-radius:50%;background:var(--gn);animation:ip 1.5s infinite"></span>'+c.integrations.join(' · ')+'</span>':'')+
-    '</div>'+
+  // ── Guard: access check
+  if (!canSee(c)) {
+    el.innerHTML = [
+      '<button class="bb" onclick="goTo(\'dashboard\')"><span class="ms sm">arrow_back</span>Voltar</button>',
+      '<div style="text-align:center;padding:56px">',
+      '<div style="font-size:36px;margin-bottom:12px">🔒</div>',
+      '<div style="font-size:16px;font-weight:700;margin-bottom:5px">Acesso restrito</div>',
+      '<div style="font-size:12.5px;color:var(--txv)">Esta campanha é Squad. Apenas membros podem visualizá-la.</div>',
+      '</div>'
+    ].join('');
+    return;
+  }
 
-    (isFin?'<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;padding:12px 16px;background:linear-gradient(135deg,rgba(83,65,205,.07),rgba(83,65,205,.02));border:1px solid var(--pfd);border-radius:13px;margin-bottom:18px">'+
-    '<div style="display:flex;align-items:center;gap:8px"><span class="ms fill" style="color:var(--pu)">task_alt</span><div><div style="font-size:12.5px;font-weight:700">Campanha Finalizada</div><div style="font-size:11px;color:var(--txv);margin-top:1px">Preencha os resultados e insights no Rastru.</div></div></div>'+
-    '<button class="btn btn-g btn-sm" onclick="openAudPicker(camps.find(function(x){return x.id=='+c.id+'}))"><span class="ms sm fill">slideshow</span>Gerar Briefing PPT</button></div>':'')+
+  // ── Safe field access helpers
+  var s  = function(v) { return String(v || ''); };
+  var a  = function(v) { return Array.isArray(v) ? v : []; };
+  var isFin      = c.lc === 'finalizada';
+  var userPerm   = getPerm(c);
+  var editAllowed = canEditCamp(c);
+  var isAdmin    = userPerm === 'admin';
 
-    /* Trail */
-    '<div class="bc" style="margin-bottom:18px"><div style="font-size:8.5px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--pu);margin-bottom:8px">Linha do rastro</div>'+
-    '<div class="trl-row">'+['Planejamento','Estratégia','Execução','Monitoramento','Resultado'].map(function(st,i){var d=i<4||c.result==='success';var a=i===3&&c.status==='active';return'<div class="trl-n"><div class="trl-d '+(d?'done':a?'act':'empty')+'"></div><div class="trl-l '+(d?'done':a?'act':'')+'">'+st+'</div></div>'+(i<4?'<div class="trl-s '+(d?'done':'')+'"></div>':'')}).join('')+
-    '</div></div>'+
+  // ── Try rendering — catch any crash with a graceful error state
+  try {
+    var html = buildDetHTML(c, isFin, editAllowed, isAdmin, s, a);
+    el.innerHTML = html;
+  } catch(err) {
+    el.innerHTML = [
+      '<button class="bb" onclick="goTo(\'dashboard\')"><span class="ms sm">arrow_back</span>Voltar</button>',
+      '<div style="padding:24px;background:var(--rdc);border-radius:12px;border:1px solid rgba(186,26,26,.2)">',
+      '<div style="font-size:14px;font-weight:700;color:var(--rd);margin-bottom:6px">Erro ao carregar campanha</div>',
+      '<div style="font-size:12px;color:var(--txv)">' + s(err.message) + '</div>',
+      '<button class="btn btn-t btn-sm" style="margin-top:12px" onclick="rDet(' + id + ')">Tentar novamente</button>',
+      '</div>'
+    ].join('');
+    console.error('[Rastru] rDet crash:', err);
+    return;
+  }
 
-    '<div class="tabs" id="det-tabs"><div class="tab on" onclick="swTab(\'ov\')">Visão Geral</div><div class="tab" onclick="swTab(\'rs\')">Resultados</div><div class="tab" onclick="swTab(\'mt\')">Materiais</div><div class="tab" onclick="swTab(\'in\')">Insights</div><div class="tab" onclick="swTab(\'vr\')">Versões <span style="background:rgba(83,65,205,.12);color:var(--pu);border-radius:9999px;padding:1px 6px;font-size:9.5px;margin-left:3px">'+(c.versions&&c.versions.length||0)+'</span></div></div>'+
-
-    /* TAB OV */
-    '<div class="tp on" id="tp-ov">'+
-    '<div class="ig">'+
-    '<div class="ic"><div class="il">Objetivo</div><div class="iv">'+(c.objective||'—')+'</div></div>'+
-    '<div class="ic"><div class="il">Dor do Cliente</div><div class="iv">'+(c.pain||'—')+'</div></div>'+
-    '<div class="ic"><div class="il">Definição de Sucesso</div><div class="iv">'+(c.successDef||'—')+'</div></div>'+
-    '<div class="ic"><div class="il">Jornada</div><div class="iv">'+(c.journey||'—')+'</div></div>'+
-    '</div>'+
-    '<div class="bc">'+
-    '<div style="font-size:13.5px;font-weight:800;margin-bottom:13px;letter-spacing:-.2px">KPIs registrados</div>'+
-    ((c.kpis&&c.kpis.length)?c.kpis.map(function(k){var p=k.result!=null?calcP(k.result,k.meta):null;var c2=p!=null?pColor(p):'';return'<div style="margin-bottom:11px"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px"><span style="font-size:12px;font-weight:700">'+k.name+'</span><div style="display:flex;gap:8px"><span style="font-size:11px;color:var(--txv);opacity:.55">meta: '+k.meta+'</span>'+(p!=null?'<span style="font-size:12.5px;font-weight:800;color:'+c2+'">'+k.result+' ('+p+'%)</span>':'')+'</div></div>'+(p!=null?'<div class="pw2"><div class="pf" id="kpf'+k.name.replace(/\W/g,'')+'" style="width:0%;background:'+c2+'"></div></div>':'')+'</div>'}).join(''):'<div style="font-size:12px;color:var(--txv);opacity:.35">Nenhum KPI</div>')+
-    '</div></div>'+
-
-    /* TAB RS */
-    '<div class="tp" id="tp-rs">'+
-    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:13px">'+
-    '<div class="rh"><div class="rbv '+(c.result==='success'?'gn':c.result==='partial'?'yw':'rd')+'">'+(c.kpis&&c.kpis[0]&&c.kpis[0].result!=null?c.kpis[0].result+(c.kpis[0].meta>10?'%':''):rEmoji(c.result))+'</div><div style="font-size:12px;color:var(--txv);margin-bottom:12px">'+(c.kpis&&c.kpis[0]?c.kpis[0].name:'Resultado principal')+'</div>'+rBadge(c.result)+'</div>'+
-    '<div style="display:flex;flex-direction:column;gap:12px">'+
-    '<div class="bc"><div style="font-size:13px;font-weight:800;margin-bottom:12px">Meta vs Resultado</div>'+
-    (c.kpis||[]).filter(function(k){return k.result!=null}).map(function(k){var p=calcP(k.result,k.meta),c2=pColor(p);return'<div style="margin-bottom:10px"><div style="display:flex;justify-content:space-between;font-size:11.5px;margin-bottom:3px"><span>'+k.name+'</span><span style="font-weight:800;color:'+c2+'">'+k.result+' / '+k.meta+' ('+p+'%)</span></div><div class="pw2"><div class="pf" style="width:'+Math.min(100,p)+'%;background:'+c2+'"></div></div></div>'}).join('')+
-    '</div>'+(c.notes?'<div class="ic"><div class="il">Aprendizado</div><div class="iv">'+c.notes+'</div></div>':'')+
-    '</div></div></div>'+
-
-    /* TAB MT */
-    '<div class="tp" id="tp-mt">'+
-    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:13px">'+
-    '<div style="font-size:13.5px;font-weight:800">Materiais e documentos</div>'+
-    (editAllowed?'<button class="btn btn-t btn-sm"><span class="ms sm">add</span>Adicionar</button>':'')+
-    '</div>'+
-    ((c.materials&&c.materials.length)?c.materials.map(function(f){return'<div class="fitem"><span style="font-size:17px">'+f.ico+'</span><div style="flex:1"><div style="font-size:12.5px;font-weight:700">'+f.name+'</div></div><span style="font-size:10px;color:var(--txv);opacity:.45">'+f.size+'</span><button class="btn btn-tx btn-sm"><span class="ms sm">download</span></button></div>'}).join(''):'<div class="emp" style="padding:30px"><div style="font-size:28px;margin-bottom:9px">📁</div>Sem materiais</div>')+
-    ((c.links&&c.links.length)?c.links.map(function(l){return'<div class="fitem"><span class="ms sm">link</span><div style="flex:1;font-size:12.5px;font-weight:600">'+l.label+'</div><span class="ms sm" style="color:var(--pu);cursor:pointer">open_in_new</span></div>'}).join(''):'')+
-    '</div>'+
-
-    /* TAB IN */
-    '<div class="tp" id="tp-in">'+
-    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">'+
-    '<div style="font-size:13.5px;font-weight:800">Aprendizados do Rastru</div>'+
-    (editAllowed?'<button class="btn btn-t btn-sm"><span class="ms sm">add</span>Adicionar</button>':'')+
-    '</div>'+
-    '<div class="ins-g">'+
-    '<div class="ins wk"><div class="ins-h">✓ Funcionou</div><ul class="ins-ul">'+(c.works||[]).map(function(i){return'<li>'+i+'</li>'}).join('')+'</ul></div>'+
-    '<div class="ins dk"><div class="ins-h">✕ Não funcionou</div><ul class="ins-ul">'+(c.didnt||[]).map(function(i){return'<li>'+i+'</li>'}).join('')+'</ul></div>'+
-    '<div class="ins op"><div class="ins-h">→ Oportunidades</div><ul class="ins-ul">'+(c.opps||[]).map(function(i){return'<li>'+i+'</li>'}).join('')+'</ul></div>'+
-    '</div>'+
-    '<div class="bc" style="margin-top:14px">'+
-    '<div style="font-size:8.5px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--pu);margin-bottom:10px">Linha do rastro histórica</div>'+
-    '<div class="tline">'+
-    '<div class="tli done"><div class="tld">'+fmtD(c.start)+'</div><div class="tlt"><strong>Campanha iniciada</strong> — '+c.name+'</div></div>'+
-    '<div class="tli done"><div class="tld">Execução</div><div class="tlt">WhatsApp · Entries: '+(c.entries||[]).join(', ')+'</div></div>'+
-    '<div class="tli done"><div class="tld">Resultado</div><div class="tlt">Classificação: <strong>'+rLbl(c.result)+'</strong></div></div>'+
-    (c.end?'<div class="tli done"><div class="tld">'+fmtD(c.end)+'</div><div class="tlt"><strong>Rastro arquivado</strong></div></div>':'')+
-    '</div></div>'+
-    (isFin?'<div style="margin-top:14px;padding:13px 16px;background:linear-gradient(135deg,rgba(83,65,205,.07),rgba(83,65,205,.02));border:1px solid var(--pfd);border-radius:13px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px">'+
-    '<div><div style="font-size:12.5px;font-weight:700;margin-bottom:3px">Briefing executivo disponível</div><div style="font-size:11px;color:var(--txv)">7 slides com IA adaptados por público — executivo, UX ou estratégia.</div></div>'+
-    '<button class="btn btn-g btn-sm" onclick="openAudPicker(camps.find(function(x){return x.id=='+c.id+'}))"><span class="ms sm fill">slideshow</span>Abrir Briefing</button></div>':'')+
-    '</div>'+
-
-    /* TAB VR — VERSIONS */
-    '<div class="tp" id="tp-vr">'+
-    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">'+
-    '<div style="font-size:13.5px;font-weight:800">Histórico de versões</div>'+
-    '<div style="font-size:11px;color:var(--txv);opacity:.5">'+(c.versions&&c.versions.length?c.versions.length+' alteração(ões) registrada(s)':'Nenhuma alteração registrada')+'</div>'+
-    '</div>'+
-    (!editAllowed?'<div style="padding:10px 13px;background:var(--rdc);border-radius:10px;font-size:12px;color:var(--rd);margin-bottom:14px"><span class="ms sm fill" style="font-size:14px;vertical-align:middle;margin-right:5px">lock</span>Você tem permissão de Visualizador — não pode restaurar versões.</div>':'')+
-    ((c.versions&&c.versions.length)?c.versions.map(function(v,i){return'<div class="ver-item">'+
-    '<div class="ver-dot" style="background:'+(v.field==='lc'?'var(--pu)':v.field==='notes'?'var(--gn)':'var(--yw)')+'"></div>'+
-    '<div class="ver-body">'+
-    '<div class="ver-field">'+v.field+'</div>'+
-    '<div class="ver-change">Alterado por <strong>'+v.user+'</strong></div>'+
-    (v.old?'<div class="ver-old">Antes: '+v.old+'</div>':'')+
-    '<div class="ver-new">Depois: '+v.new+'</div>'+
-    '<div class="ver-meta">'+fmtTS(v.ts)+'</div>'+
-    '</div>'+
-    (editAllowed?'<button class="ver-restore" onclick="restoreVersion('+c.id+','+i+')">↩ Restaurar</button>':'')+
-    '</div>'}).join(''):'<div class="emp" style="padding:30px"><div style="font-size:28px;margin-bottom:9px">📋</div>Nenhuma versão registrada ainda</div>')+
-    /* Demo edit button */
-    (editAllowed?'<div style="margin-top:14px;padding:14px 16px;background:var(--sfl);border-radius:12px;border:1px solid var(--ov)">'+
-    '<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--txv);opacity:.5;margin-bottom:10px">Editar campos</div>'+
-    '<div class="fr2" style="gap:9px;margin-bottom:9px">'+
-    '<div class="fg" style="margin:0"><label class="fl">Notas / aprendizado</label><textarea id="edit-notes-'+c.id+'" class="fc" rows="2" style="font-size:12px">'+escHtml(c.notes||'')+'</textarea></div>'+
-    '<div class="fg" style="margin:0"><label class="fl">Ciclo de vida</label><select id="edit-lc-'+c.id+'" class="fc"><option value="rascunho"'+(c.lc==='rascunho'?' selected':'')+'>Rascunho</option><option value="aprovacao"'+(c.lc==='aprovacao'?' selected':'')+'>Aguard. aprovação</option><option value="ativa"'+(c.lc==='ativa'?' selected':'')+'>Ativa</option><option value="analise"'+(c.lc==='analise'?' selected':'')+'>Em análise</option><option value="finalizada"'+(c.lc==='finalizada'?' selected':'')+'>Finalizada</option><option value="arquivada"'+(c.lc==='arquivada'?' selected':'')+'>Arquivada</option></select></div>'+
-    '</div>'+
-    '<div class="fg" style="margin-bottom:9px"><label class="fl">Objetivo</label><textarea id="edit-obj-'+c.id+'" class="fc" rows="2" style="font-size:12px">'+escHtml(c.objective||'')+'</textarea></div>'+
-    '<div style="display:flex;gap:8px;justify-content:flex-end">'+
-    '<button class="btn btn-t btn-sm" onclick="cancelEdit('+c.id+')">Cancelar</button>'+
-    '<button class="btn btn-f btn-sm" onclick="saveEdits('+c.id+')"><span class="ms sm">save</span>Salvar alterações</button>'+
-    '</div></div>':'')+'   +
-    '</div>';
-
-  /* Animate progress bars */
-  setTimeout(function(){
-    if(!c.kpis)return;
-    c.kpis.forEach(function(k){
-      var p=k.result!=null?calcP(k.result,k.meta):null;
-      if(p===null)return;
-      var el=ge('kpf'+k.name.replace(/\W/g,''));
-      if(el){el.style.width='0%';setTimeout(function(){el.style.width=Math.min(100,p)+'%'},80);}
+  // ── Animate KPI bars after render
+  setTimeout(function() {
+    a(c.kpis).forEach(function(k) {
+      var p = k.result != null ? calcP(k.result, k.meta) : null;
+      if (p === null) return;
+      var bar = ge('kpf' + k.name.replace(/\W/g, ''));
+      if (bar) { bar.style.width = '0%'; setTimeout(function() { bar.style.width = Math.min(100, p) + '%'; }, 80); }
     });
-  },60);
+  }, 60);
 }
+
+// ── Builds the full detail HTML safely
+function buildDetHTML(c, isFin, editAllowed, isAdmin, s, a) {
+  var kpis    = a(c.kpis);
+  var squad   = a(c.squad);
+  var vers    = a(c.versions);
+  var mats    = a(c.materials);
+  var links   = a(c.links);
+  var works   = a(c.works);
+  var didnt   = a(c.didnt);
+  var opps    = a(c.opps);
+
+  // Header
+  var header = [
+    '<button class="bb" onclick="goTo(\'dashboard\')"><span class="ms sm">arrow_back</span>Voltar</button>',
+    '<div style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:20px">',
+      '<div>',
+        '<div class="sey"><span class="sey-t">Ver rastro</span></div>',
+        '<div class="det-t">' + escHtml(s(c.name)) + '</div>',
+        '<div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:6px">',
+          '<span class="chip">' + escHtml(s(c.client)) + '</span>',
+          (c.celula ? '<span class="chip">' + escHtml(s(c.celula)) + '</span>' : ''),
+          '<span class="chip"><span class="ms sm fill" style="font-size:12px">chat</span>WhatsApp</span>',
+          sBadge(c.status), pBadge(c.privacy),
+          a(c.entries).map(function(e) { return '<span class="chtag entry">' + escHtml(s(e)) + '</span>'; }).join(''),
+          a(c.tags).map(function(t) { return '<span class="chtag">' + escHtml(s(t)) + '</span>'; }).join(''),
+        '</div>',
+      '</div>',
+      '<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:flex-start">',
+        permBadge(c),
+        '<button class="btn btn-t btn-sm" onclick="dupCamp(' + c.id + ')"><span class="ms sm">content_copy</span>Duplicar</button>',
+        (isAdmin ? '<button class="btn btn-warn btn-sm" onclick="deleteCamp(' + c.id + ')"><span class="ms sm">delete</span>Excluir</button>' : ''),
+        '<button class="btn btn-g btn-sm" onclick="openAudPicker(camps.find(function(x){return x.id==' + c.id + '}))"><span class="ms sm fill">slideshow</span>Briefing PPT</button>',
+      '</div>',
+    '</div>'
+  ].join('');
+
+  // Squad pills
+  var squadHtml = squad.length ? [
+    '<div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin-bottom:14px">',
+      '<span style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--txv);opacity:.45">Squad:</span>',
+      squad.map(function(sq) {
+        return '<div class="sq-pill" title="' + escHtml(s(sq.email)) + ' — ' + getRoleLbl(sq.permission) + '">' +
+          '<div class="sq-av" style="background:' + getAvatarColor(s(sq.name)) + '">' + s(sq.name).charAt(0).toUpperCase() + '</div>' +
+          '<span>' + escHtml(s(sq.name)) + '</span>' +
+          '<span style="font-size:9px;opacity:.5">' + escHtml(s(sq.role)) + '</span>' +
+          '<span class="role-badge ' + getRoleCls(sq.permission) + '">' + getRoleLbl(sq.permission) + '</span>' +
+          '</div>';
+      }).join(''),
+    '</div>'
+  ].join('') : '';
+
+  // Notify toggle (admin only, when squad has emails)
+  var hasEmails = squad.some(function(sq) { return sq.email; });
+  var notifyHtml = (isAdmin && hasEmails) ? [
+    '<div style="display:flex;align-items:center;gap:8px;padding:9px 13px;background:' + (c.notifyOnClose ? 'rgba(83,65,205,.06)' : 'var(--sfl)') + ';border:1.5px solid ' + (c.notifyOnClose ? 'var(--pfd)' : 'var(--ov)') + ';border-radius:10px;margin-bottom:10px">',
+      '<input type="checkbox" id="det-notify-' + c.id + '" style="width:15px;height:15px;accent-color:var(--pu);cursor:pointer;flex-shrink:0" ' + (c.notifyOnClose ? 'checked' : '') + ' onchange="toggleNotify(' + c.id + ',this.checked)">',
+      '<label for="det-notify-' + c.id + '" style="font-size:12px;font-weight:600;color:var(--txv);cursor:pointer">',
+        '<span class="ms sm fill" style="font-size:14px;vertical-align:middle;margin-right:4px;color:var(--pu)">notifications</span>',
+        'Notificar membros ao encerrar campanha',
+      '</label>',
+    '</div>'
+  ].join('') : '';
+
+  // Source row
+  var srcHtml = [
+    '<div style="display:flex;align-items:center;gap:7px;margin-bottom:16px">',
+      '<span style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--txv);opacity:.45">Fonte:</span>',
+      '<span style="display:inline-flex;align-items:center;gap:4px;padding:2px 9px;border-radius:9999px;font-size:11px;font-weight:600;background:' + (c.ds === 'manual' ? 'var(--sfc)' : 'rgba(0,108,75,.1)') + ';color:' + (c.ds === 'manual' ? 'var(--txv)' : 'var(--gn)') + ';border:1px solid ' + (c.ds === 'manual' ? 'var(--ov)' : 'rgba(0,108,75,.2)') + '">',
+        '<span class="ms sm fill" style="font-size:12px">' + dsIco(c.ds) + '</span>' + dsLbl(c.ds),
+      '</span>',
+      (a(c.integrations).length ? '<span style="display:inline-flex;align-items:center;gap:4px;padding:2px 9px;border-radius:9999px;font-size:11px;font-weight:600;background:rgba(0,108,75,.07);color:var(--gn);border:1px solid rgba(0,108,75,.16)"><span style="width:5px;height:5px;border-radius:50%;background:var(--gn);animation:ip 1.5s infinite"></span>' + a(c.integrations).join(' · ') + '</span>' : ''),
+    '</div>'
+  ].join('');
+
+  // Finalized banner
+  var finBanner = isFin ? [
+    '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;padding:12px 16px;background:linear-gradient(135deg,rgba(83,65,205,.07),rgba(83,65,205,.02));border:1px solid var(--pfd);border-radius:13px;margin-bottom:18px">',
+      '<div style="display:flex;align-items:center;gap:8px"><span class="ms fill" style="color:var(--pu)">task_alt</span>',
+        '<div><div style="font-size:12.5px;font-weight:700">Campanha Finalizada</div>',
+        '<div style="font-size:11px;color:var(--txv);margin-top:1px">Preencha os resultados e insights.</div></div>',
+      '</div>',
+      '<button class="btn btn-g btn-sm" onclick="openAudPicker(camps.find(function(x){return x.id==' + c.id + '}))"><span class="ms sm fill">slideshow</span>Gerar Briefing PPT</button>',
+    '</div>'
+  ].join('') : '';
+
+  // Trail
+  var trailSteps = ['Planejamento', 'Estratégia', 'Execução', 'Monitoramento', 'Resultado'];
+  var trailHtml = [
+    '<div class="bc" style="margin-bottom:18px">',
+      '<div style="font-size:8.5px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--pu);margin-bottom:8px">Linha do rastro</div>',
+      '<div class="trl-row">',
+        trailSteps.map(function(st, i) {
+          var done = i < 4 || c.result === 'success';
+          var act  = i === 3 && c.status === 'active';
+          return '<div class="trl-n"><div class="trl-d ' + (done ? 'done' : act ? 'act' : 'empty') + '"></div><div class="trl-l ' + (done ? 'done' : act ? 'act' : '') + '">' + st + '</div></div>' +
+            (i < 4 ? '<div class="trl-s ' + (done ? 'done' : '') + '"></div>' : '');
+        }).join(''),
+      '</div>',
+    '</div>'
+  ].join('');
+
+  // Tabs
+  var tabs = [
+    '<div class="tabs" id="det-tabs">',
+      '<div class="tab on" onclick="swTab(\'ov\')">Visão Geral</div>',
+      '<div class="tab" onclick="swTab(\'rs\')">Resultados</div>',
+      '<div class="tab" onclick="swTab(\'mt\')">Materiais</div>',
+      '<div class="tab" onclick="swTab(\'in\')">Insights</div>',
+      '<div class="tab" onclick="swTab(\'ed\')">Editar</div>',
+      '<div class="tab" onclick="swTab(\'vr\')">Versões <span style="background:rgba(83,65,205,.12);color:var(--pu);border-radius:9999px;padding:1px 6px;font-size:9.5px;margin-left:3px">' + vers.length + '</span></div>',
+    '</div>'
+  ].join('');
+
+  // Tab: Overview
+  var kpiHtml = kpis.length ? kpis.map(function(k) {
+    var p = k.result != null ? calcP(k.result, k.meta) : null;
+    var clr = p != null ? pColor(p) : '';
+    return [
+      '<div style="margin-bottom:11px">',
+        '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">',
+          '<span style="font-size:12px;font-weight:700">' + escHtml(s(k.name)) + '</span>',
+          '<div style="display:flex;gap:8px">',
+            '<span style="font-size:11px;color:var(--txv);opacity:.55">meta: ' + s(k.meta) + '</span>',
+            (p != null ? '<span style="font-size:12.5px;font-weight:800;color:' + clr + '">' + s(k.result) + ' (' + p + '%)</span>' : ''),
+          '</div>',
+        '</div>',
+        (p != null ? '<div class="pw2"><div class="pf" id="kpf' + k.name.replace(/\W/g,'') + '" style="width:0%;background:' + clr + '"></div></div>' : ''),
+      '</div>'
+    ].join('');
+  }).join('') : '<div style="font-size:12px;color:var(--txv);opacity:.35">Nenhum KPI registrado</div>';
+
+  var tabOv = [
+    '<div class="tp on" id="tp-ov">',
+      '<div class="ig">',
+        '<div class="ic"><div class="il">Objetivo</div><div class="iv">' + escHtml(s(c.objective) || '—') + '</div></div>',
+        '<div class="ic"><div class="il">Dor do Cliente</div><div class="iv">' + escHtml(s(c.pain) || '—') + '</div></div>',
+        '<div class="ic"><div class="il">Definição de Sucesso</div><div class="iv">' + escHtml(s(c.successDef) || '—') + '</div></div>',
+        '<div class="ic"><div class="il">Jornada</div><div class="iv">' + escHtml(s(c.journey) || '—') + '</div></div>',
+      '</div>',
+      '<div class="bc"><div style="font-size:13.5px;font-weight:800;margin-bottom:13px;letter-spacing:-.2px">KPIs registrados</div>' + kpiHtml + '</div>',
+    '</div>'
+  ].join('');
+
+  // Tab: Results
+  var kpiResults = kpis.filter(function(k) { return k.result != null; });
+  var topKpi = kpis[0] || null;
+  var rC = c.result === 'success' ? 'gn' : c.result === 'partial' ? 'yw' : 'rd';
+  var tabRs = [
+    '<div class="tp" id="tp-rs">',
+      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:13px">',
+        '<div class="rh">',
+          '<div class="rbv ' + rC + '">' + (topKpi && topKpi.result != null ? s(topKpi.result) + (topKpi.meta > 10 ? '%' : '') : rEmoji(c.result)) + '</div>',
+          '<div style="font-size:12px;color:var(--txv);margin-bottom:12px">' + (topKpi ? escHtml(s(topKpi.name)) : 'Resultado principal') + '</div>',
+          rBadge(c.result),
+        '</div>',
+        '<div style="display:flex;flex-direction:column;gap:12px">',
+          '<div class="bc"><div style="font-size:13px;font-weight:800;margin-bottom:12px">Meta vs Resultado</div>',
+            kpiResults.map(function(k) {
+              var p = calcP(k.result, k.meta);
+              var clr = pColor(p);
+              return '<div style="margin-bottom:10px"><div style="display:flex;justify-content:space-between;font-size:11.5px;margin-bottom:3px"><span>' + escHtml(s(k.name)) + '</span><span style="font-weight:800;color:' + clr + '">' + s(k.result) + ' / ' + s(k.meta) + ' (' + p + '%)</span></div><div class="pw2"><div class="pf" style="width:' + Math.min(100,p) + '%;background:' + clr + '"></div></div></div>';
+            }).join(''),
+          '</div>',
+          (c.notes ? '<div class="ic"><div class="il">Aprendizado</div><div class="iv">' + escHtml(s(c.notes)) + '</div></div>' : ''),
+        '</div>',
+      '</div>',
+    '</div>'
+  ].join('');
+
+  // Tab: Materials
+  var matsHtml = mats.length ? mats.map(function(f) {
+    return '<div class="fitem"><span style="font-size:17px">' + s(f.ico) + '</span><div style="flex:1"><div style="font-size:12.5px;font-weight:700">' + escHtml(s(f.name)) + '</div></div><span style="font-size:10px;color:var(--txv);opacity:.45">' + s(f.size) + '</span><button class="btn btn-tx btn-sm"><span class="ms sm">download</span></button></div>';
+  }).join('') : '<div class="emp" style="padding:30px"><div style="font-size:28px;margin-bottom:9px">📁</div>Sem materiais</div>';
+  var linksHtml = links.map(function(l) {
+    return '<div class="fitem"><span class="ms sm">link</span><div style="flex:1;font-size:12.5px;font-weight:600">' + escHtml(s(l.label)) + '</div><span class="ms sm" style="color:var(--pu);cursor:pointer">open_in_new</span></div>';
+  }).join('');
+  var tabMt = '<div class="tp" id="tp-mt"><div style="font-size:13.5px;font-weight:800;margin-bottom:13px">Materiais e documentos</div>' + matsHtml + linksHtml + '</div>';
+
+  // Tab: Insights
+  var tabIn = [
+    '<div class="tp" id="tp-in">',
+      '<div class="ins-g">',
+        '<div class="ins wk"><div class="ins-h">✓ Funcionou</div><ul class="ins-ul">' + works.map(function(i) { return '<li>' + escHtml(s(i)) + '</li>'; }).join('') + '</ul></div>',
+        '<div class="ins dk"><div class="ins-h">✕ Não funcionou</div><ul class="ins-ul">' + didnt.map(function(i) { return '<li>' + escHtml(s(i)) + '</li>'; }).join('') + '</ul></div>',
+        '<div class="ins op"><div class="ins-h">→ Oportunidades</div><ul class="ins-ul">' + opps.map(function(i) { return '<li>' + escHtml(s(i)) + '</li>'; }).join('') + '</ul></div>',
+      '</div>',
+      '<div class="bc" style="margin-top:14px">',
+        '<div style="font-size:8.5px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--pu);margin-bottom:10px">Linha histórica</div>',
+        '<div class="tline">',
+          '<div class="tli done"><div class="tld">' + fmtD(s(c.start)) + '</div><div class="tlt"><strong>Campanha iniciada</strong> — ' + escHtml(s(c.name)) + '</div></div>',
+          '<div class="tli done"><div class="tld">Execução</div><div class="tlt">WhatsApp · Entries: ' + a(c.entries).join(', ') + '</div></div>',
+          '<div class="tli done"><div class="tld">Resultado</div><div class="tlt">Classificação: <strong>' + rLbl(c.result) + '</strong></div></div>',
+          (c.end ? '<div class="tli done"><div class="tld">' + fmtD(s(c.end)) + '</div><div class="tlt"><strong>Rastro arquivado</strong></div></div>' : ''),
+        '</div>',
+      '</div>',
+      (isFin ? '<div style="margin-top:14px;padding:13px 16px;background:linear-gradient(135deg,rgba(83,65,205,.07),rgba(83,65,205,.02));border:1px solid var(--pfd);border-radius:13px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px"><div><div style="font-size:12.5px;font-weight:700;margin-bottom:3px">Briefing executivo disponível</div><div style="font-size:11px;color:var(--txv)">7 slides com IA — executivo, UX ou estratégia.</div></div><button class="btn btn-g btn-sm" onclick="openAudPicker(camps.find(function(x){return x.id==' + c.id + '}))"><span class="ms sm fill">slideshow</span>Abrir Briefing</button></div>' : ''),
+    '</div>'
+  ].join('');
+
+  // Tab: Edit
+  var resOptions = ['success', 'partial', 'failure'];
+  var resLabels  = { success: '✅ Sucesso', partial: '🟡 Parcial', failure: '❌ Falha' };
+  var tabEd = [
+    '<div class="tp" id="tp-ed">',
+      (!editAllowed ? '<div style="padding:10px 13px;background:var(--rdc);border-radius:10px;font-size:12px;color:var(--rd);margin-bottom:14px"><span class="ms sm fill" style="font-size:14px;vertical-align:middle;margin-right:5px">lock</span>Você é Visualizador desta campanha.</div>' : ''),
+      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">',
+        fieldEdit('edit-name-'+c.id,    'Nome',        'input',  s(c.name)),
+        fieldEdit('edit-client-'+c.id,  'Cliente',     'input',  s(c.client)),
+        fieldEdit('edit-celula-'+c.id,  'Célula',      'input',  s(c.celula)),
+        lcSelect(c),
+      '</div>',
+      fieldEdit('edit-objective-'+c.id, 'Objetivo',    'textarea', s(c.objective)),
+      fieldEdit('edit-pain-'+c.id,      'Dor',         'textarea', s(c.pain)),
+      fieldEdit('edit-journey-'+c.id,   'Jornada',     'textarea', s(c.journey)),
+      fieldEdit('edit-notes-'+c.id,     'Notas',       'textarea', s(c.notes)),
+      // Result — only when finalizada
+      isFin ? resultEditor(c) : '<div style="padding:9px 12px;background:var(--sfl);border-radius:9px;font-size:12px;color:var(--txv);margin-bottom:10px"><span class="ms sm fill" style="font-size:13px;vertical-align:middle;margin-right:5px;color:var(--yw)">info</span>Resultado disponível após campanha ser <strong>Finalizada</strong>.</div>',
+      (editAllowed ? [
+        '<div style="display:flex;gap:8px;justify-content:flex-end;padding-top:12px;border-top:1px solid rgba(200,196,215,.12)">',
+          '<button class="btn btn-t btn-sm" onclick="cancelEdit(' + c.id + ')">Cancelar</button>',
+          '<button class="btn btn-f btn-sm" onclick="saveEdits(' + c.id + ')"><span class="ms sm">save</span>Salvar</button>',
+        '</div>'
+      ].join('') : ''),
+    '</div>'
+  ].join('');
+
+  // Tab: Versions
+  var tabVr = [
+    '<div class="tp" id="tp-vr">',
+      '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">',
+        '<div style="font-size:13.5px;font-weight:800">Histórico de versões</div>',
+        '<div style="font-size:11px;color:var(--txv);opacity:.5">' + vers.length + ' alteração(ões)</div>',
+      '</div>',
+      (!editAllowed ? '<div style="padding:10px 13px;background:var(--rdc);border-radius:10px;font-size:12px;color:var(--rd);margin-bottom:14px"><span class="ms sm fill" style="font-size:14px;vertical-align:middle;margin-right:5px">lock</span>Visualizador — não pode restaurar versões.</div>' : ''),
+      vers.length ? vers.map(function(v, i) {
+        return [
+          '<div class="ver-item">',
+            '<div class="ver-dot" style="background:' + (v.field === 'lc' ? 'var(--pu)' : v.field === 'notes' ? 'var(--gn)' : 'var(--yw)') + '"></div>',
+            '<div class="ver-body">',
+              '<div class="ver-field">' + s(v.field) + '</div>',
+              '<div class="ver-change">Alterado por <strong>' + escHtml(s(v.user)) + '</strong></div>',
+              (v.old ? '<div class="ver-old">Antes: ' + escHtml(s(v.old)) + '</div>' : ''),
+              '<div class="ver-new">Depois: ' + escHtml(s(v.new)) + '</div>',
+              '<div class="ver-meta">' + fmtTS(v.ts) + '</div>',
+            '</div>',
+            (editAllowed ? '<button class="ver-restore" onclick="restoreVersion(' + c.id + ',' + i + ')">↩ Restaurar</button>' : ''),
+          '</div>'
+        ].join('');
+      }).join('')
+      : '<div class="emp" style="padding:30px"><div style="font-size:28px;margin-bottom:9px">📋</div>Nenhuma versão registrada ainda</div>',
+    '</div>'
+  ].join('');
+
+  return [header, squadHtml, notifyHtml, srcHtml, finBanner, trailHtml, tabs, tabOv, tabRs, tabMt, tabIn, tabEd, tabVr].join('');
+}
+
+// ── Helper: field editor
+function fieldEdit(id, label, type, value) {
+  var tag = type === 'textarea' ? 'textarea' : 'input';
+  var attrs = type === 'textarea' ? ' class="fc" rows="2"' : ' class="fc" value="' + escHtml(value) + '"';
+  var inner = type === 'textarea' ? escHtml(value) : '';
+  return '<div class="fg" style="margin-bottom:10px"><label class="fl">' + label + '</label><' + tag + ' id="' + id + '"' + attrs + '>' + inner + '</' + tag + '></div>';
+}
+
+// ── Helper: lc select
+function lcSelect(c) {
+  var opts = [
+    ['rascunho','Rascunho'],['aprovacao','Aguard. aprovação'],['ativa','Ativa'],
+    ['analise','Em análise'],['finalizada','Finalizada'],['arquivada','Arquivada']
+  ];
+  return '<div class="fg" style="margin-bottom:10px"><label class="fl">Ciclo de vida</label><select id="edit-lc-' + c.id + '" class="fc">' +
+    opts.map(function(o) { return '<option value="' + o[0] + '"' + (c.lc === o[0] ? ' selected' : '') + '>' + o[1] + '</option>'; }).join('') +
+    '</select></div>';
+}
+
+// ── Helper: result editor (only when finalizada)
+function resultEditor(c) {
+  var opts = [['success','✅','Sucesso'],['partial','🟡','Parcial'],['failure','❌','Falha']];
+  return '<div class="fg" style="margin-bottom:10px"><label class="fl">Resultado final</label>' +
+    '<div style="display:flex;gap:8px;margin-top:5px">' +
+    opts.map(function(o) {
+      return '<div class="topt' + (c.result === o[0] ? ' on' : '') + '" onclick="this.parentNode.querySelectorAll(\'.topt\').forEach(function(x){x.classList.remove(\'on\')});this.classList.add(\'on\');ge(\'edit-result-' + c.id + '\').value=\'' + o[0] + '\'">' +
+        '<span class="ti">' + o[1] + '</span><span class="tl">' + o[2] + '</span></div>';
+    }).join('') +
+    '</div><input type="hidden" id="edit-result-' + c.id + '" value="' + escHtml(String(c.result||'')) + '"></div>';
+}
+
+// ── Helper: permission badge
+function permBadge(c) {
+  var p = getPerm(c);
+  if (p === 'admin')  return '<span class="perm-tip" style="color:var(--pu);background:var(--pf)"><span class="ms sm fill" style="font-size:12px">workspace_premium</span>Admin</span>';
+  if (p === 'editor') return '<span class="perm-tip" style="color:var(--gn);background:rgba(0,108,75,.1)"><span class="ms sm fill" style="font-size:12px">edit</span>Editor</span>';
+  return '<span class="perm-tip"><span class="ms sm fill" style="font-size:12px">lock</span>Apenas leitura</span>';
+}
+
+
 function demoEditField(campId,field,newVal){saveField(campId,field,newVal);rDet(campId);}
 function swTab(t){
   var al=['ov','rs','mt','in','vr'];
@@ -1746,22 +1946,10 @@ function notionClear() {
 }
 
 function notionFetch(path, method, body) {
-  var url = 'https://api.notion.com/v1' + path;
-  var headers = {
-    'Authorization': 'Bearer ' + NOTION_CFG.token,
-    'Notion-Version': '2022-06-28',
-    'Content-Type': 'application/json'
-  };
-  var opts = { method: method || 'GET', headers: headers };
+  var url = '/api/notion/v1' + path;
+  var opts = { method: method || 'GET', headers: { 'Content-Type': 'application/json' } };
   if (body) opts.body = JSON.stringify(body);
-  return fetch(url, opts)
-    .then(function(r) { if (!r.ok) throw new Error(r.status); return r; })
-    .catch(function() {
-      var proxy = 'https://corsproxy.io/?' + encodeURIComponent(url);
-      var popts = { method: method || 'GET', headers: headers };
-      if (body) popts.body = JSON.stringify(body);
-      return fetch(proxy, popts).then(function(r) { if (!r.ok) throw new Error(r.status); return r; });
-    });
+  return fetch(url, opts).then(function(r) { if (!r.ok) throw new Error(r.status); return r; });
 }
 
 function notionPageToCamp(page) {
@@ -1917,41 +2105,78 @@ function testAndSaveNotion() {
   var err = ge('ns-err');
   var btn = ge('ns-save-btn');
   err.style.display = 'none';
+
   if (!t || !d) {
     err.textContent = 'Preencha Token e Database ID';
     err.style.display = 'block';
     return;
   }
-  btn.textContent = 'Testando…';
+
+  btn.textContent = 'Verificando servidor…';
   btn.disabled = true;
   btn.style.opacity = '.7';
-  NOTION_CFG.token = t;
-  NOTION_CFG.dbId = d;
-  NOTION_CFG.enabled = true;
-  fetch('/api/notion/v1/databases/' + d)
-    .then(function(r) {
-      if (!r.ok) throw new Error(r.status);
-      return r.json();
-    })
-    .then(function(data) {
-      notionSave(t, d);
-      btn.textContent = 'Conectado ✓';
-      btn.style.background = 'var(--gn)';
-      btn.style.opacity = '1';
-      updateSetupStatus();
-      showNotionStatus('ok');
-      showToast('✅', 'Notion conectado!', 'Sincronizando…');
-      setTimeout(function() { closeNotionSetup(); notionSync(); }, 900);
+
+  // Step 1: Check proxy health
+  fetch('/api/notion/health')
+    .then(function(r) { return r.json(); })
+    .then(function(health) {
+      if (!health.tokenPresent) {
+        err.innerHTML = '<strong>NOTION_TOKEN não configurado no Vercel.</strong><br>Acesse: <a href="https://vercel.com/linexjrpos-projects/rastru/settings/environment-variables" target="_blank" style="color:var(--pu)">vercel.com → rastru → Settings → Env Vars</a><br>Adicione: Key=<code>NOTION_TOKEN</code> Value=seu_token';
+        err.style.display = 'block';
+        btn.textContent = 'Salvar e Conectar';
+        btn.disabled = false;
+        btn.style.opacity = '1';
+        return;
+      }
+
+      // Step 2: Test database with token stored server-side
+      btn.textContent = 'Testando database…';
+      NOTION_CFG.token = t;
+      NOTION_CFG.dbId = d;
+      NOTION_CFG.enabled = true;
+
+      fetch('/api/notion/v1/databases/' + d)
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+          if (data.id || data.object === 'database') {
+            notionSave(t, d);
+            btn.textContent = 'Conectado ✓';
+            btn.style.background = 'var(--gn)';
+            btn.style.opacity = '1';
+            updateSetupStatus();
+            showNotionStatus('ok');
+            showToast('✅', 'Notion conectado!', 'Sincronizando…');
+            setTimeout(function() { closeNotionSetup(); notionSync(); }, 900);
+          } else if (data._diagnostic) {
+            err.textContent = 'Token inválido no servidor. ' + (data._diagnostic.hint || '');
+            err.style.display = 'block';
+            btn.textContent = 'Salvar e Conectar';
+            btn.disabled = false;
+            btn.style.opacity = '1';
+            btn.style.background = '';
+            NOTION_CFG.enabled = false;
+            showNotionStatus('error');
+          } else {
+            throw new Error('invalid response');
+          }
+        })
+        .catch(function() {
+          err.textContent = 'Falha. Verifique: (1) Token correto na env var do Vercel, (2) Database ID correto, (3) Database compartilhado com a integração via "Connect to".';
+          err.style.display = 'block';
+          btn.textContent = 'Salvar e Conectar';
+          btn.disabled = false;
+          btn.style.opacity = '1';
+          btn.style.background = '';
+          NOTION_CFG.enabled = false;
+          showNotionStatus('error');
+        });
     })
     .catch(function() {
-      err.textContent = 'Falha na conexão. Certifique-se que o database está compartilhado com a integração via "Connect to".';
+      err.textContent = 'Não foi possível verificar o proxy. Certifique-se que rastru.vercel.app está acessível.';
       err.style.display = 'block';
       btn.textContent = 'Salvar e Conectar';
       btn.disabled = false;
       btn.style.opacity = '1';
-      btn.style.background = '';
-      NOTION_CFG.enabled = false;
-      showNotionStatus('error');
     });
 }
 
@@ -2051,6 +2276,12 @@ function setDevView(mode){
   }
   ge('dev-toggle-dev').className='dev-tag '+(mode==='dev'?'on':'off');
   ge('dev-toggle-usr').className='dev-tag '+(mode==='usr'?'on':'off');
+  var nb=document.querySelector('.sb-notion-btn');
+  if(nb)nb.style.display=(CURRENT_USER.isOwner&&mode==='dev')?'flex':'none';
+  var ns=ge('notion-status');
+  if(ns)ns.style.display=(CURRENT_USER.isOwner&&mode==='dev')?'flex':'none';
+  if(pg==='dashboard')rDash();
+  if(pg==='repository')rRepo();
   // Re-render current page to reflect view
   if(pg==='dashboard')rDash();
   if(pg==='repository')rRepo();
@@ -2072,14 +2303,26 @@ function escHtml(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt
 function saveEdits(campId){
   var camp=camps.find(function(x){return x.id==campId;});
   if(!camp)return;
-  var notes=ge('edit-notes-'+campId);
-  var lc=ge('edit-lc-'+campId);
-  var obj=ge('edit-obj-'+campId);
-  if(notes&&notes.value!==camp.notes)saveField(campId,'notes',notes.value);
-  if(lc&&lc.value!==camp.lc)saveField(campId,'lc',lc.value);
-  if(obj&&obj.value!==camp.objective)saveField(campId,'objective',obj.value);
+  var pairs=[
+    ['edit-name-'+campId,'name'],
+    ['edit-client-'+campId,'client'],
+    ['edit-celula-'+campId,'celula'],
+    ['edit-lc-'+campId,'lc'],
+    ['edit-objective-'+campId,'objective'],
+    ['edit-pain-'+campId,'pain'],
+    ['edit-journey-'+campId,'journey'],
+    ['edit-notes-'+campId,'notes'],
+    ['edit-result-'+campId,'result']
+  ];
+  var changed=0;
+  pairs.forEach(function(p){
+    var el=ge(p[0]);
+    if(!el)return;
+    var nv=el.value;
+    if(nv!==String(camp[p[1]]||'')){saveField(campId,p[1],nv);changed++;}
+  });
+  if(!changed)showToast('ℹ️','Sem alterações','Nenhum campo modificado.');
   rDet(campId);
-  showToast('✓','Campanha salva!','Alterações registradas.');
 }
 
 function cancelEdit(campId){rDet(campId);}
@@ -2158,10 +2401,19 @@ function dupCamp(campId){
   goTo('detail',nc.id);
 }
 
+
+function toggleNotify(campId, val){
+  var camp=camps.find(function(x){return x.id==campId;});
+  if(!camp)return;
+  camp.notifyOnClose=val;
+  if(NOTION_CFG.enabled)notionUpdate(camp);
+  showToast(val?'🔔':'🔕', val?'Notificação ativada':'Desativada','Membros '+(val?'serão':'não serão')+' notificados ao encerrar.');
+}
+
 /* Init on load — credentials pre-configured */
-/* Credentials pre-loaded — sync happens after login */
-notionSave('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', '346bcb0554b2800f8ca1cec10c8ec93f');
+/* Credentials loaded from localStorage only */
 notionLoad();
+
 
 
 </script>
