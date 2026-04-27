@@ -1980,14 +1980,17 @@ function gsLoadCamps(cb) {
 /* Save single camp to sheet */
 function gsSaveCamp(camp) {
   if (!GS_CFG.enabled || !GS_CFG.url) return;
-  /* Apps Script recebe JSON via postData.contents com method POST + no-cors */
-  /* Usamos URL param para máxima compatibilidade */
-  var data = encodeURIComponent(JSON.stringify(camp));
-  fetch(GS_CFG.url + '?action=save&data=' + data)
+  /* POST com form-urlencoded — Apps Script recebe via e.parameter.data */
+  var body = 'action=save&data=' + encodeURIComponent(JSON.stringify(camp));
+  fetch(GS_CFG.url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: body
+  })
     .then(function(r) { return r.json(); })
     .then(function(result) {
-      if (!result.ok) console.warn('[Rastru] gsSaveCamp failed:', result);
-      else showSyncStatus('ok');
+      if (result.ok) { showSyncStatus('ok'); }
+      else { console.warn('[Rastru] gsSaveCamp failed:', result); showSyncStatus('error'); }
     })
     .catch(function(err) {
       console.error('[Rastru] gsSaveCamp error:', err);
