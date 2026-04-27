@@ -1929,11 +1929,17 @@ function renderDemoStep(){
 /* ── GOOGLE SHEETS SYNC ── */
 var GS_CFG = { url: '', enabled: false };
 
+/* Default URL — auto-configured for all users */
+var GS_DEFAULT_URL = 'https://script.google.com/macros/s/AKfycbyYbri4dxGxfyhVEFF-_Uew7w4xSNOVILO-Q74Y7TzzoMJRIwfmiXPZSsdvByR11sT2yA/exec';
+
 function gsLoad() {
   try {
-    var saved = localStorage.getItem('rastru_gs_url');
+    var saved = localStorage.getItem('rastru_gs_url') || GS_DEFAULT_URL;
     if (saved) { GS_CFG.url = saved; GS_CFG.enabled = true; }
-  } catch(e) {}
+  } catch(e) {
+    GS_CFG.url = GS_DEFAULT_URL;
+    GS_CFG.enabled = true;
+  }
 }
 
 function gsSave(url) {
@@ -1974,20 +1980,19 @@ function gsLoadCamps(cb) {
 /* Save single camp to sheet */
 function gsSaveCamp(camp) {
   if (!GS_CFG.enabled || !GS_CFG.url) return;
-  fetch(GS_CFG.url + '?action=save', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(camp)
-  })
-  .then(function(r) { return r.json(); })
-  .then(function(data) {
-    if (!data.ok) console.warn('[Rastru] gsSaveCamp failed:', data);
-    showSyncStatus('ok');
-  })
-  .catch(function(err) {
-    console.error('[Rastru] gsSaveCamp error:', err);
-    showSyncStatus('error');
-  });
+  /* Apps Script recebe JSON via postData.contents com method POST + no-cors */
+  /* Usamos URL param para máxima compatibilidade */
+  var data = encodeURIComponent(JSON.stringify(camp));
+  fetch(GS_CFG.url + '?action=save&data=' + data)
+    .then(function(r) { return r.json(); })
+    .then(function(result) {
+      if (!result.ok) console.warn('[Rastru] gsSaveCamp failed:', result);
+      else showSyncStatus('ok');
+    })
+    .catch(function(err) {
+      console.error('[Rastru] gsSaveCamp error:', err);
+      showSyncStatus('error');
+    });
 }
 
 /* Delete camp from sheet */
