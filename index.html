@@ -992,6 +992,8 @@ function doRegister(){
 
 function loginSuccess(firstName,fullName,email,isOwner){
   CURRENT_USER={name:fullName,firstName:firstName,email:email,avatar:firstName.charAt(0).toUpperCase(),isOwner:isOwner};
+  /* Persist session across page refreshes */
+  try{localStorage.setItem('rastru_session',JSON.stringify(CURRENT_USER));}catch(e){}
   ge('login-screen').style.opacity='0';
   ge('login-screen').style.transform='scale(.96)';
   ge('login-screen').style.transition='all .35s ease';
@@ -1006,7 +1008,7 @@ function loginSuccess(firstName,fullName,email,isOwner){
     showToast('👋','Olá, '+firstName+'!','Crie uma campanha e você vira admin dela.');
   },350);
 }
-function doLogout(){ge('app-shell').classList.remove('on');ge('app-shell').classList.remove('on');ge('login-screen').style.display='flex';ge('login-screen').style.opacity='1';ge('login-screen').style.transform='none';if(ge('login-email'))ge('login-email').value='';if(ge('login-pass'))ge('login-pass').value='';if(ge('pass-field'))ge('pass-field').style.display='none';if(ge('register-screen'))ge('register-screen').style.display='none';CURRENT_USER={};}
+function doLogout(){ge('app-shell').classList.remove('on');try{localStorage.removeItem('rastru_session');}catch(e){}ge('app-shell').classList.remove('on');ge('login-screen').style.display='flex';ge('login-screen').style.opacity='1';ge('login-screen').style.transform='none';if(ge('login-email'))ge('login-email').value='';if(ge('login-pass'))ge('login-pass').value='';if(ge('pass-field'))ge('pass-field').style.display='none';if(ge('register-screen'))ge('register-screen').style.display='none';CURRENT_USER={};}
 function updateUserUI(){
   var u=CURRENT_USER;
   ge('sb-uname').textContent=u.firstName;
@@ -1233,8 +1235,22 @@ function rDash(){
 }
 
 function rBentoCharts(){
-  var mo=[{m:'Out',s:1,f:1},{m:'Nov',s:2,f:1},{m:'Dez',s:1,f:2},{m:'Jan',s:2,f:2},{m:'Fev',s:3,f:1},{m:'Mar',s:3,f:2},{m:'Abr',s:3,f:2}];
-  var bars=mo.map(function(d){return'<div class="brc"><div class="brv">'+(d.s+d.f)+'</div><div class="brs"><div class="brb" style="background:var(--gn);height:'+Math.round((d.s/5)*50)+'px"></div><div class="brb" style="background:rgba(186,26,26,.3);height:'+Math.round((d.f/5)*50)+'px"></div></div><div class="brl">'+d.m+'</div></div>'}).join('');
+  /* Compute monthly data from REAL camps — last 7 months */
+  var now=new Date();
+  var mo=[];
+  for(var mi=6;mi>=0;mi--){
+    var d=new Date(now.getFullYear(),now.getMonth()-mi,1);
+    var mKey=d.getFullYear()+'-'+(d.getMonth()+1);
+    var mLabel=['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'][d.getMonth()];
+    var mCamps=visibleCamps().filter(function(camp){
+      var ca=camp.createdAt||'';
+      return ca.startsWith(d.getFullYear()+'-'+(String(d.getMonth()+1).padStart(2,'0')));
+    });
+    var s=mCamps.filter(function(x){return x.lc==='finalizada'&&x.result==='success';}).length;
+    var f=mCamps.filter(function(x){return x.lc==='finalizada'&&(x.result==='failure'||x.result==='partial');}).length;
+    mo.push({m:mLabel,s:s,f:f,total:mCamps.length});
+  }
+  var bars=mo.map(function(d){return'<div class="brc"><div class="brv">'+(d.s+d.f)+'</div><div class="brs"><div class="brb" style="background:var(--gn);height:'+Math.round((Math.max(d.s,1)/Math.max(mo.reduce(function(a,x){return Math.max(a,x.total);},1),1))*44)+'px"></div><div class="brb" style="background:rgba(186,26,26,.3);height:'+Math.round((Math.max(d.f,0)/Math.max(mo.reduce(function(a,x){return Math.max(a,x.total);},1),1))*44)+'px"></div></div><div class="brl">'+d.m+'</div></div>'}).join('');
   ge('brow').innerHTML='<div class="bc"><div class="bc-ey">Performance</div><div class="bc-t">Rastros por mês</div><div class="bc-s">Sucesso vs falha</div><div class="bar-row">'+bars+'</div><div class="leg"><div class="li"><div class="ld" style="background:var(--gn)"></div>Sucesso</div><div class="li"><div class="ld" style="background:rgba(186,26,26,.38)"></div>Falha</div></div></div>'+
   '<div class="bc"><div class="bc-ey">Distribuição</div><div class="bc-t">Resultado por tipo</div><div class="bc-s">Classificação das campanhas</div><div class="dw" style="margin-top:7px"><svg width="86" height="86" viewBox="0 0 36 36"><circle r="15.9" cx="18" cy="18" fill="transparent" stroke="var(--sfc)" stroke-width="3.5"/><circle r="15.9" cx="18" cy="18" fill="transparent" stroke="var(--gn)" stroke-width="3.5" stroke-dasharray="60 40" stroke-dashoffset="25"/><circle r="15.9" cx="18" cy="18" fill="transparent" stroke="var(--yw)" stroke-width="3.5" stroke-dasharray="20 80" stroke-dashoffset="-35"/><circle r="15.9" cx="18" cy="18" fill="transparent" stroke="var(--rd)" stroke-width="3.5" stroke-dasharray="20 80" stroke-dashoffset="-55"/><text x="18" y="20" text-anchor="middle" fill="var(--tx)" font-size="5" font-family="Manrope,sans-serif" font-weight="800">60%</text></svg><div class="dl">'+[['var(--gn)','Sucesso','60%'],['var(--yw)','Parcial','20%'],['var(--rd)','Falha','20%']].map(function(x){return'<div class="dlr"><div class="dls" style="background:'+x[0]+'"></div><span class="dln">'+x[1]+'</span><span class="dlv" style="color:'+x[0]+'">'+x[2]+'</span></div>'}).join('')+'</div></div></div>';
 }
@@ -2406,8 +2422,28 @@ function toggleNotify(campId, val){
 }
 
 /* Init on load — credentials pre-configured */
-/* Load Google Sheets config */
-gsLoad();
+/* Restore session if page was refreshed */
+(function(){
+  try{
+    var sess=localStorage.getItem('rastru_session');
+    if(sess){
+      var u=JSON.parse(sess);
+      if(u&&u.email&&u.firstName){
+        CURRENT_USER=u;
+        ge('login-screen').style.display='none';
+        ge('app-shell').classList.add('on');
+        updateUserUI();
+        updateOwnerUI();
+        initDevMode();
+        rDash();
+        setTimeout(function(){gsLoad();gsLoadCamps();},100);
+        return;
+      }
+    }
+  }catch(e){}
+  /* No session — show login */
+  gsLoad();
+})();
 
 
 
