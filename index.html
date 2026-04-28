@@ -814,13 +814,11 @@ body.dev-view .dev-panel{display:block}
 </div>
 
 <!-- DEMO OVERLAY -->
-<div class="demo-overlay" id="demo-overlay" style="display:none">
-  <div class="demo-box" id="demo-box">
-    <div class="demo-step"><div class="demo-step-dot" id="demo-step-n">1</div><span id="demo-step-lbl">Introdução</span></div>
-    <div class="demo-title" id="demo-title">Bem-vindo ao Rastru!</div>
-    <div class="demo-desc" id="demo-desc">Tour guiado de todos os recursos em 8 passos.</div>
+<span id="demo-step-lbl">Introdução</span></div>
+    
+    
     <div class="demo-ft">
-      <div class="demo-dots" id="demo-dots"></div>
+      
       <div style="display:flex;gap:7px;align-items:center">
         <button class="demo-skip" onclick="endDemo()">Pular tour</button>
         <button class="btn btn-t btn-sm" id="demo-prev-btn" onclick="demoPrev()" style="display:none"><span class="ms sm">arrow_back</span></button>
@@ -842,6 +840,10 @@ var CAMPS=[];
 
 /* ── PERMISSIONS & AUTH ── */
 var CURRENT_USER = { name:'', firstName:'', email:'', avatar:'', isOwner:false };
+var RASTRU_VERSION = '1.0.0';
+var RASTRU_ENV = 'production';
+var RASTRU_VERSION = '1.0.0';
+var RASTRU_ENV     = 'production';
 var camps = [].concat(CAMPS);
 var pg='dashboard', detId=null, ws=0, wd={};
 var pptS=1, pptCamp=null, nCampId=null, selectedAud='executive', pptCampForAud=null;
@@ -1000,7 +1002,7 @@ function loginSuccess(firstName,fullName,email,isOwner){
     updateOwnerUI();
     initDevMode();
     rDash();
-    if(NOTION_CFG.enabled)notionSync(true);
+    gsLoadCamps(); /* Load camps from Google Sheets on login */
     showToast('👋','Olá, '+firstName+'!','Crie uma campanha e você vira admin dela.');
   },350);
 }
@@ -1055,7 +1057,7 @@ function goTo(p,id){
   var nav=ge('nav-'+p);if(nav)nav.classList.add('on');
   pg=p;
   if(p==='new'){
-    ws=0;wd={type:'whatsapp',entries:[],celula:'',privacy:'public',ds:'manual',squad:[],tags:[],kpis:[],files:[],links:[],ints:[],result:'success',lc:'rascunho',status:'active',notifyOnClose:true};rWiz();
+    ws=0;wd={type:'whatsapp',entries:[],celula:'',privacy:'public',ds:'manual',squad:[],tags:[],kpis:[],files:[],links:[],ints:[],result:null,lc:'rascunho',status:'active',notifyOnClose:true};rWiz();
   }
   if(p==='detail'&&id){detId=id;rDet(id);}
   if(p==='dashboard')rDash();
@@ -1248,7 +1250,7 @@ function rTable(list){
       '<td style="font-size:11px;color:var(--txv)">'+(c.celula||'—')+'</td>'+
       '<td>'+pBadge(c.privacy)+'</td>'+
       '<td>'+sBadge(c.status)+'</td>'+
-      '<td>'+rBadge(c.result)+'</td>'+
+      '<td>'+(c.lc==='finalizada'?rBadge(c.result):'')+'</td>'+
       '<td style="min-width:95px">'+(avgP>0?'<div style="display:flex;justify-content:space-between;font-size:9.5px;color:var(--txv);opacity:.6;margin-bottom:3px"><span>'+(c.kpis&&c.kpis[0]?c.kpis[0].name:'KPI')+'</span><span style="color:'+pc+';font-weight:700;opacity:1">'+avgP+'%</span></div><div class="pw2"><div class="pf" style="width:'+Math.min(100,avgP)+'%;background:'+pc+'"></div></div>':'—')+'</td>'+
       '<td><button class="btn btn-tx btn-sm" onclick="event.stopPropagation();goTo(\'detail\','+c.id+')">Ver <span class="ms sm">arrow_forward</span></button></td>'+
     '</tr>';
@@ -1650,7 +1652,7 @@ function buildDetHTML(c, isFin, editAllowed, isAdmin, s, a) {
         '<div class="rh">',
           '<div class="rbv ' + rC + '">' + (topKpi && topKpi.result != null ? s(topKpi.result) + (topKpi.meta > 10 ? '%' : '') : rEmoji(c.result)) + '</div>',
           '<div style="font-size:12px;color:var(--txv);margin-bottom:12px">' + (topKpi ? escHtml(s(topKpi.name)) : 'Resultado principal') + '</div>',
-          rBadge(c.result),
+          (c.lc==='finalizada'?rBadge(c.result):''),
         '</div>',
         '<div style="display:flex;flex-direction:column;gap:12px">',
           '<div class="bc"><div style="font-size:13px;font-weight:800;margin-bottom:12px">Meta vs Resultado</div>',
@@ -1869,54 +1871,10 @@ function rHist(list){
 function clearF(){['f-cl','f-rs','f-priv','f-ds','f-mb','f-tg'].forEach(function(id){var el=ge(id);if(el)el.value=''});var ri=ge('repo-q');if(ri)ri.value='';applyF();}
 
 /* ═══ DEMO TOUR ═══ */
-var demoStep=0;
-var DEMO_STEPS=[
-  {title:'Bem-vindo ao Rastru! 👋',desc:'Tour guiado de 8 passos mostrando todos os recursos da plataforma. Você vai ver login, dashboard, criação, permissões, PPT e mais.',target:null,page:'dashboard'},
-  {title:'Dashboard com visão geral',desc:'O hero banner mostra rastros ativos, taxa de sucesso e campanhas finalizadas. Os 4 cards de métrica têm stripe colorida por categoria.',target:'mtrs',page:'dashboard'},
-  {title:'Tabela de campanhas',desc:'Exibe célula, privacidade (🔒/🌐), status, resultado e progresso de KPI em tempo real. Clique em qualquer linha para ver o detalhe.',target:'dtb',page:'dashboard'},
-  {title:'Repositório com filtros',desc:'7 filtros simultâneos: cliente, resultado, privacidade, fonte de dados, membro, tags + busca textual. Cards com Preview PPT e score de completude.',target:'fbar',page:'repository'},
-  {title:'Histórico do repositório',desc:'Painel lateral com todas as campanhas em ordem cronológica. Clique no nome para navegar diretamente ao detalhe.',target:'hist-list',page:'repository'},
-  {title:'Nova campanha — wizard',desc:'Wizard em 5 etapas: básico, contexto, estratégia (entry points #tag), métricas (KPI + fonte de dados) e resultado. Canal único WhatsApp.',target:'wtr',page:'new'},
-  {title:'Briefing PPT com público-alvo',desc:'Ao clicar em "Briefing PPT", escolha o público: Executivo, Portfólio UX ou Estratégia. A IA adapta os destaques de cada slide. Há botão de download.',target:'aud-g',page:null},
-  {title:'Histórico de versões',desc:'Cada edição gera uma versão com campo alterado, valor anterior/novo, usuário e timestamp. Visualizadores não podem restaurar. Botão de simular está na aba Versões.',target:null,page:'detail'}
-];
-function startDemo(){
-  if(!ge('app-shell').classList.contains('on')){
-    /* auto-login demo */
-    CURRENT_USER={name:'Demo User',firstName:'Demo',email:'demo@blip.ai',avatar:'D',isOwner:false};
-    ge('login-screen').style.display='none';
-    ge('app-shell').classList.add('on');
-    updateUserUI();rDash();
-  }
-  demoStep=0;
-  ge('demo-overlay').style.display='block';
-  renderDemoStep();
-}
+
 function endDemo(){ge('demo-overlay').style.display='none';document.querySelectorAll('.demo-highlight').forEach(function(el){el.classList.remove('demo-highlight')});}
 function demoNext(){if(demoStep<DEMO_STEPS.length-1){demoStep++;renderDemoStep();}else{endDemo();showToast('🎉','Tour concluído!','Agora você conhece todos os recursos do Rastru.');}}
 function demoPrev(){if(demoStep>0){demoStep--;renderDemoStep();}}
-function renderDemoStep(){
-  var step=DEMO_STEPS[demoStep];
-  ge('demo-step-n').textContent=demoStep+1;
-  ge('demo-step-lbl').textContent='Passo '+(demoStep+1)+' de '+DEMO_STEPS.length;
-  ge('demo-title').textContent=step.title;
-  ge('demo-desc').textContent=step.desc;
-  ge('demo-prev-btn').style.display=demoStep>0?'':'none';
-  ge('demo-next-btn').textContent=demoStep===DEMO_STEPS.length-1?'Concluir ✓':'Próximo →';
-  ge('demo-dots').innerHTML=DEMO_STEPS.map(function(_,i){return'<div class="demo-dot'+(i===demoStep?' on':'')+'"></div>'}).join('');
-  /* Navigate to page if needed */
-  if(step.page&&step.page!=='detail')goTo(step.page,step.page==='detail'?5:undefined);
-  /* Highlight target */
-  document.querySelectorAll('.demo-highlight').forEach(function(el){el.classList.remove('demo-highlight')});
-  if(step.target){
-    var el=ge(step.target);
-    if(el){el.classList.add('demo-highlight');el.scrollIntoView({behavior:'smooth',block:'nearest'});}
-  }
-  /* Position demo box */
-  var box=ge('demo-box');
-  if(step.target){var el2=ge(step.target);if(el2){var r=el2.getBoundingClientRect();box.style.top=Math.min(window.innerHeight-280,r.bottom+10)+'px';box.style.left=Math.max(8,Math.min(window.innerWidth-358,r.left))+'px';}else{box.style.top='50%';box.style.left='50%';box.style.transform='translate(-50%,-50%)';}}
-  else{box.style.top='50%';box.style.left='50%';box.style.transform='translate(-50%,-50%)';}
-}
 
 /* ─ INIT ─ */
 // Show login on load — app stays hidden
@@ -2322,7 +2280,16 @@ function updateDevNotion(){
 }
 
 function devClearLocalStorage(){
-  try{localStorage.clear();showToast('🗑','Storage limpo','Recarregue para ver efeito.');}catch(e){}
+  try{
+    // Only clear auth/config — NOT camp data (stored in Google Sheets)
+    localStorage.removeItem('rastru_gs_url');
+    localStorage.removeItem('rastru_dev_view');
+    // Clear member passwords (dev only)
+    var keys=[];
+    for(var i=0;i<localStorage.length;i++){var k=localStorage.key(i);if(k&&k.startsWith('rastru_'))keys.push(k);}
+    keys.forEach(function(k){localStorage.removeItem(k);});
+    showToast('🗑','Config limpa','Recarregue. Dados das campanhas estão no Sheets.');
+  }catch(e){}
 }
 
 
