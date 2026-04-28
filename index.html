@@ -1252,7 +1252,39 @@ function rBentoCharts(){
   }
   var bars=mo.map(function(d){return'<div class="brc"><div class="brv">'+(d.s+d.f)+'</div><div class="brs"><div class="brb" style="background:var(--gn);height:'+Math.round((Math.max(d.s,1)/Math.max(mo.reduce(function(a,x){return Math.max(a,x.total);},1),1))*44)+'px"></div><div class="brb" style="background:rgba(186,26,26,.3);height:'+Math.round((Math.max(d.f,0)/Math.max(mo.reduce(function(a,x){return Math.max(a,x.total);},1),1))*44)+'px"></div></div><div class="brl">'+d.m+'</div></div>'}).join('');
   ge('brow').innerHTML='<div class="bc"><div class="bc-ey">Performance</div><div class="bc-t">Rastros por mês</div><div class="bc-s">Sucesso vs falha</div><div class="bar-row">'+bars+'</div><div class="leg"><div class="li"><div class="ld" style="background:var(--gn)"></div>Sucesso</div><div class="li"><div class="ld" style="background:rgba(186,26,26,.38)"></div>Falha</div></div></div>'+
-  '<div class="bc"><div class="bc-ey">Distribuição</div><div class="bc-t">Resultado por tipo</div><div class="bc-s">Classificação das campanhas</div><div class="dw" style="margin-top:7px"><svg width="86" height="86" viewBox="0 0 36 36"><circle r="15.9" cx="18" cy="18" fill="transparent" stroke="var(--sfc)" stroke-width="3.5"/><circle r="15.9" cx="18" cy="18" fill="transparent" stroke="var(--gn)" stroke-width="3.5" stroke-dasharray="60 40" stroke-dashoffset="25"/><circle r="15.9" cx="18" cy="18" fill="transparent" stroke="var(--yw)" stroke-width="3.5" stroke-dasharray="20 80" stroke-dashoffset="-35"/><circle r="15.9" cx="18" cy="18" fill="transparent" stroke="var(--rd)" stroke-width="3.5" stroke-dasharray="20 80" stroke-dashoffset="-55"/><text x="18" y="20" text-anchor="middle" fill="var(--tx)" font-size="5" font-family="Manrope,sans-serif" font-weight="800">60%</text></svg><div class="dl">'+[['var(--gn)','Sucesso','60%'],['var(--yw)','Parcial','20%'],['var(--rd)','Falha','20%']].map(function(x){return'<div class="dlr"><div class="dls" style="background:'+x[0]+'"></div><span class="dln">'+x[1]+'</span><span class="dlv" style="color:'+x[0]+'">'+x[2]+'</span></div>'}).join('')+'</div></div></div>';
+  (function(){
+  var fin=vc.filter(function(x){return x.lc==='finalizada';});
+  var tot=fin.length;
+  var ns=fin.filter(function(x){return x.result==='success';}).length;
+  var np=fin.filter(function(x){return x.result==='partial';}).length;
+  var nf=fin.filter(function(x){return x.result==='failure';}).length;
+  if(tot===0){
+    return '<div class="bc"><div class="bc-ey">Distribuição</div><div class="bc-t">Resultado por tipo</div><div class="bc-s">Classificação das campanhas</div><div style="padding:18px 0;text-align:center;font-size:12px;color:var(--txv);opacity:.4">Nenhuma campanha finalizada ainda</div></div>';
+  }
+  var ps=Math.round((ns/tot)*100);
+  var pp=Math.round((np/tot)*100);
+  var pf=100-ps-pp;
+  var circ=100;
+  var ds=ps; var do_s=25;
+  var dp=pp; var do_p=-(ds-100+25);
+  var df=pf; var do_f=-(ds+dp-100+25);
+  var mainPct=ps>pp&&ps>pf?ps:pp>pf?pp:pf;
+  var mainClr=ps>=pp&&ps>=pf?'var(--gn)':pp>=pf?'var(--yw)':'var(--rd)';
+  return '<div class="bc"><div class="bc-ey">Distribuição</div><div class="bc-t">Resultado por tipo</div><div class="bc-s">'+tot+' campanha'+(tot!==1?'s':'')+' finalizadas</div>'+
+  '<div class="dw" style="margin-top:7px">'+
+  '<svg width="86" height="86" viewBox="0 0 36 36">'+
+  '<circle r="15.9" cx="18" cy="18" fill="transparent" stroke="var(--sfc)" stroke-width="3.5"/>'+
+  (ps>0?'<circle r="15.9" cx="18" cy="18" fill="transparent" stroke="var(--gn)" stroke-width="3.5" stroke-dasharray="'+ds+' '+(100-ds)+'" stroke-dashoffset="'+do_s+'"/>':'')+ 
+  (pp>0?'<circle r="15.9" cx="18" cy="18" fill="transparent" stroke="var(--yw)" stroke-width="3.5" stroke-dasharray="'+dp+' '+(100-dp)+'" stroke-dashoffset="'+do_p+'"/>':'')+ 
+  (pf>0?'<circle r="15.9" cx="18" cy="18" fill="transparent" stroke="var(--rd)" stroke-width="3.5" stroke-dasharray="'+df+' '+(100-df)+'" stroke-dashoffset="'+do_f+'"/>':'')+ 
+  '<text x="18" y="20" text-anchor="middle" fill="var(--tx)" font-size="5" font-family="Manrope,sans-serif" font-weight="800">'+mainPct+'%</text>'+
+  '</svg>'+
+  '<div class="dl">'+
+  [['var(--gn)','Sucesso',ps+'%','('+ns+')'+(ps===0?' — nenhuma':'')],['var(--yw)','Parcial',pp+'%','('+np+')'],['var(--rd)','Falha',pf+'%','('+nf+')']].map(function(i){
+    return '<div class="li"><div class="ld" style="background:'+i[0]+'"></div><span>'+i[1]+'</span><span style="margin-left:auto;font-weight:700;font-size:11px">'+i[2]+'</span><span style="font-size:10px;color:var(--txv);opacity:.6;margin-left:3px">'+i[3]+'</span></div>';
+  }).join('')+
+  '</div></div></div>';
+})();
 }
 
 function rTable(list){
