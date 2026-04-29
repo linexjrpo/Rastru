@@ -1040,6 +1040,7 @@ function saveField(campId, field, newVal){
   var old=c[field]||'';
   recordVersion(campId,field,old,newVal);
   c[field]=newVal;
+  gsSaveCamp(c); /* Sync to Google Sheets */
   showToast('✏️','Campo atualizado','"'+field+'" editado por '+CURRENT_USER.firstName);
 }
 function restoreVersion(campId, verIdx){
@@ -1390,6 +1391,8 @@ function mkCamp(){
   else{sq=sq.map(function(s){return s.email===creatorEmail?Object.assign({},s,{permission:'admin'}):s;});}
   var nc={id:Date.now(),name:wd.name||'Nova Campanha',client:wd.client||'Sem cliente',status:wd.status||'active',lc:wd.lc||'rascunho',type:'whatsapp',entries:wd.entries||[],celula:wd.celula||'',result:wd.result||'partial',privacy:wd.privacy||'public',ds:wd.ds||'manual',start:wd.start||'',end:wd.end||'',objective:wd.objective||'',pain:wd.pain||'',successDef:wd.successDef||'',journey:wd.journey||'',squad:sq,tags:wd.tags||[],kpis:wd.kpis||[],integrations:wd.ints||[],materials:(wd.files||[]).map(function(f){return{name:f.name,size:f.size,ico:'📄'};}),notes:wd.notes||'',notifyOnClose:wd.notifyOnClose!==false,works:[],didnt:[],opps:[],links:wd.links||[],createdAt:new Date().toISOString().slice(0,10),createdBy:creatorEmail,versions:[]};
   camps.unshift(nc);ws=5;rWiz();
+  /* Save to Google Sheets immediately */
+  gsSaveCamp(nc);
   showToast('◈','Rastro registrado!','Você é admin de "'+nc.name+'".');
   if(nc.lc==='finalizada')setTimeout(function(){triggerNotif(nc)},1100);
 }
@@ -2378,6 +2381,7 @@ function deleteCamp(campId){
   if(NOTION_CFG.enabled&&camp.notionId){
     notionFetch('/pages/'+camp.notionId,'PATCH',{archived:true}).catch(function(){});
   }
+  gsDeleteCamp(campId);
   showToast('🗑','Campanha excluída',camp.name);
   goTo('dashboard');
 }
