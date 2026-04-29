@@ -2121,113 +2121,9 @@ function testAndSaveNotion() { gsTestAndSave(); }
 function updateSetupStatus() { updateGsStatus(); }
 function disconnectNotion() { gsDisconnect(); }
 
-function closeNotionSetup() {
-  var modal = ge('notion-setup-modal');
-  if (modal) modal.classList.remove('show');
-}
 
-function updateSetupStatus() {
-  var el = ge('ns-status');
-  if (!el) return;
-  if (NOTION_CFG.enabled) {
-    el.innerHTML = '<div style="display:flex;align-items:center;gap:7px;padding:9px 13px;background:rgba(0,108,75,.08);border:1px solid rgba(0,108,75,.22);border-radius:9px;font-size:12.5px;font-weight:700;color:var(--gn)">● Notion conectado e ativo</div>';
-  } else {
-    el.innerHTML = '<div style="font-size:12px;color:var(--txv);opacity:.55">○ Não configurado — usando dados locais</div>';
-  }
-}
 
-function testAndSaveNotion() {
-  var t = (ge('ns-token').value || '').trim();
-  var d = (ge('ns-dbid').value || '').trim();
-  var err = ge('ns-err');
-  var btn = ge('ns-save-btn');
-  err.style.display = 'none';
 
-  if (!t || !d) {
-    err.textContent = 'Preencha Token e Database ID';
-    err.style.display = 'block';
-    return;
-  }
-
-  btn.textContent = 'Verificando servidor…';
-  btn.disabled = true;
-  btn.style.opacity = '.7';
-
-  // Step 1: Check proxy health
-  fetch('/api/notion/health')
-    .then(function(r) { return r.json(); })
-    .then(function(health) {
-      if (!health.tokenPresent) {
-        err.innerHTML = '<strong>NOTION_TOKEN não configurado no Vercel.</strong><br>Acesse: <a href="https://vercel.com/linexjrpos-projects/rastru/settings/environment-variables" target="_blank" style="color:var(--pu)">vercel.com → rastru → Settings → Env Vars</a><br>Adicione: Key=<code>NOTION_TOKEN</code> Value=seu_token';
-        err.style.display = 'block';
-        btn.textContent = 'Salvar e Conectar';
-        btn.disabled = false;
-        btn.style.opacity = '1';
-        return;
-      }
-
-      // Step 2: Test database with token stored server-side
-      btn.textContent = 'Testando database…';
-      NOTION_CFG.token = t;
-      NOTION_CFG.dbId = d;
-      NOTION_CFG.enabled = true;
-
-      fetch('/api/notion/v1/databases/' + d)
-        .then(function(r) { return r.json(); })
-        .then(function(data) {
-          if (data.id || data.object === 'database') {
-            notionSave(t, d);
-            btn.textContent = 'Conectado ✓';
-            btn.style.background = 'var(--gn)';
-            btn.style.opacity = '1';
-            updateSetupStatus();
-            showNotionStatus('ok');
-            showToast('✅', 'Notion conectado!', 'Sincronizando…');
-            setTimeout(function() { closeNotionSetup(); notionSync(); }, 900);
-          } else if (data._diagnostic) {
-            err.textContent = 'Token inválido no servidor. ' + (data._diagnostic.hint || '');
-            err.style.display = 'block';
-            btn.textContent = 'Salvar e Conectar';
-            btn.disabled = false;
-            btn.style.opacity = '1';
-            btn.style.background = '';
-            NOTION_CFG.enabled = false;
-            showNotionStatus('error');
-          } else {
-            throw new Error('invalid response');
-          }
-        })
-        .catch(function() {
-          err.textContent = 'Falha. Verifique: (1) Token correto na env var do Vercel, (2) Database ID correto, (3) Database compartilhado com a integração via "Connect to".';
-          err.style.display = 'block';
-          btn.textContent = 'Salvar e Conectar';
-          btn.disabled = false;
-          btn.style.opacity = '1';
-          btn.style.background = '';
-          NOTION_CFG.enabled = false;
-          showNotionStatus('error');
-        });
-    })
-    .catch(function() {
-      err.textContent = 'Não foi possível verificar o proxy. Certifique-se que rastru.vercel.app está acessível.';
-      err.style.display = 'block';
-      btn.textContent = 'Salvar e Conectar';
-      btn.disabled = false;
-      btn.style.opacity = '1';
-    });
-}
-
-function disconnectNotion() {
-  notionClear();
-  updateSetupStatus();
-  showNotionStatus('off');
-  showToast('○', 'Desconectado', 'Usando dados locais');
-  ge('ns-token').value = '';
-  ge('ns-dbid').value = '';
-  var btn = ge('ns-save-btn');
-  if (btn) { btn.textContent = 'Salvar e Conectar'; btn.disabled = false; btn.style.background = ''; btn.style.opacity = '1'; }
-  if (ge('ns-err')) ge('ns-err').style.display = 'none';
-}
 
 function createNotionTemplate() {
   var props = [
@@ -2443,6 +2339,7 @@ function dupCamp(campId){
   nc.lc='rascunho';
   nc.status='active';
   camps.unshift(nc);
+  gsSaveCamp(nc); /* Sync to Sheets */
   if(NOTION_CFG.enabled)notionCreate(nc);
   showToast('\u29E7','Campanha duplicada',nc.name);
   goTo('detail',nc.id);
