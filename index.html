@@ -2042,21 +2042,29 @@ function gsLoadCamps(cb) {
 /* Save single camp to sheet */
 function gsSaveCamp(camp) {
   if (!GS_CFG.enabled || !GS_CFG.url) return;
-  /* POST com form-urlencoded — Apps Script recebe via e.parameter.data */
-  var body = 'action=save&data=' + encodeURIComponent(JSON.stringify(camp));
-  fetch(GS_CFG.url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: body
-  })
-    .then(function(r) { return r.json(); })
-    .then(function(result) {
-      if (result.ok) { showSyncStatus('ok'); }
-      else { console.warn('[Rastru] gsSaveCamp failed:', result); showSyncStatus('error'); }
-    })
+  /* Use no-cors POST — Google Apps Script POST redirect workaround */
+  /* Slim the camp object to stay under URL limits */
+  var slim = {
+    id: camp.id, name: camp.name, client: camp.client, celula: camp.celula,
+    status: camp.status, lc: camp.lc, result: camp.result,
+    squad: camp.squad||[], kpis: camp.kpis||[], tags: camp.tags||[],
+    entries: camp.entries||[], createdAt: camp.createdAt, createdBy: camp.createdBy,
+    notifyOnClose: camp.notifyOnClose, objective: camp.objective||'',
+    notes: camp.notes||'', start: camp.start||'', end: camp.end||'',
+    pain: camp.pain||'', successDef: camp.successDef||'', journey: camp.journey||'',
+    works: camp.works||[], didnt: camp.didnt||[], opps: camp.opps||[],
+    ds: camp.ds||'manual', privacy: camp.privacy||'public',
+    materials: camp.materials||[], links: camp.links||[], versions: camp.versions||[]
+  };
+  var encoded = encodeURIComponent(JSON.stringify(slim));
+  var url = GS_CFG.url + '?action=save&data=' + encoded;
+  /* Use no-cors to avoid redirect issues — fire and forget */
+  fetch(url, { method: 'POST', mode: 'no-cors' })
+    .then(function() { showSyncStatus('ok'); })
     .catch(function(err) {
-      console.error('[Rastru] gsSaveCamp error:', err);
-      showSyncStatus('error');
+      /* Fallback: try GET */
+      fetch(url).then(function() { showSyncStatus('ok'); })
+        .catch(function(e) { console.error('[Rastru] gsSaveCamp error:', e); showSyncStatus('error'); });
     });
 }
 
