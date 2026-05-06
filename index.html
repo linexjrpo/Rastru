@@ -2046,9 +2046,7 @@ function rowToCamp(row) {
 
 /* Load all campaigns from Supabase */
 function gsLoadCamps(cb) {
-  IS_LOADING_SHEETS = true;
-
-  /* Restore from localStorage cache instantly */
+  /* Load from Supabase — source of truth */
   try {
     var cached = localStorage.getItem('rastru_camps_cache');
     if (cached) {
@@ -2071,7 +2069,14 @@ function gsLoadCamps(cb) {
     return r.json();
   })
   .then(function(rows) {
-    var fetched = (rows || []).map(rowToCamp);
+    console.log('[Rastru] Supabase raw rows:', (rows||[]).length);
+    var fetched;
+    try {
+      fetched = (rows || []).map(rowToCamp);
+    } catch(mapErr) {
+      console.error('[Rastru] rowToCamp crash:', mapErr.message);
+      fetched = [];
+    }
     console.log('[Rastru] Supabase returned', fetched.length, 'campaigns:', fetched.map(function(x){return x.name;}));
     /* Always update — Supabase is source of truth */
     camps = fetched;
@@ -2082,18 +2087,19 @@ function gsLoadCamps(cb) {
     if (cb) cb(camps);
   })
   .catch(function(err) {
-    console.error('[Rastru] gsLoadCamps FAILED:', err.message, err);
+    console.error('[Rastru] gsLoadCamps FAILED:', err.message);
     showSyncStatus('error');
-    /* On error, keep showing cached data */
-    if (camps.length === 0) {
-      try {
-        var cached = localStorage.getItem('rastru_camps_cache');
-        if (cached) {
-          camps = JSON.parse(cached);
-          console.log('[Rastru] Restored', camps.length, 'camps from cache after error');
+    /* On CORS/network error, restore from cache */
+    try {
+      var cached = localStorage.getItem('rastru_camps_cache');
+      if (cached) {
+        var cp = JSON.parse(cached);
+        if (cp && cp.length > 0) {
+          camps = cp;
+          console.log('[Rastru] Showing', camps.length, 'cached camps (Supabase unreachable)');
         }
-      } catch(e) {}
-    }
+      }
+    } catch(e) {}
     if (typeof rDash === 'function') rDash();
     if (typeof rRepo === 'function' && pg === 'repository') rRepo();
   });
@@ -2139,13 +2145,7 @@ function gsDeleteCamp(id) {
 
 /* Connection init — no token needed, key is permanent */
 function gsLoad() {
-  /* Key is hardcoded — always connected */
-  /* Test connection on startup */
-  fetch(SB_URL + '/campaigns?select=id&limit=1', { headers: sbHeaders(false) })
-    .then(function(r) { 
-      console.log('[Rastru] Supabase connection test:', r.status, r.status === 200 ? 'OK' : 'FAILED');
-    })
-    .catch(function(e) { console.error('[Rastru] Supabase unreachable:', e.message); });
+  /* Supabase key is hardcoded — always connected */
 }
 
 function gsSave(url) {}
@@ -2197,6 +2197,20 @@ function lcLabel(lc) {
   return m[lc] || lc || '—';
 }
 
+
+function devClearLocalStorage(){
+  try{
+    var keys=[];
+    for(var i=0;i<localStorage.length;i++){
+      var k=localStorage.key(i);
+      if(k&&k.startsWith('rastru_'))keys.push(k);
+    }
+    keys.forEach(function(k){localStorage.removeItem(k);});
+    camps=[];
+    showToast('🗑','Storage limpo','Dados locais removidos. Recarregue.');
+  }catch(e){}
+}
+
 /* Init on load — credentials pre-configured */
 /* Restore session if page was refreshed */
 (function(){
@@ -2215,10 +2229,19 @@ function lcLabel(lc) {
         /* Load from cache first for instant display */
         try {
           var _cc=localStorage.getItem('rastru_camps_cache');
-          if(_cc){ camps=JSON.parse(_cc); rDash(); }
-          else { rDash(); }
-        } catch(e){ rDash(); }
-        /* Then fetch fresh from Supabase */
+          if(_cc){
+            var _cp=JSON.parse(_cc);
+            camps=_cp;
+            console.log('[Rastru] Session restore: cache has',_cp.length,'camps');
+          } else {
+            console.log('[Rastru] Session restore: no cache');
+          }
+        } catch(e){
+          console.error('[Rastru] Session restore cache error:',e.message);
+        }
+        rDash();
+        /* Fetch fresh from Supabase */
+        console.log('[Rastru] Starting Supabase fetch...');
         gsLoadCamps();
         return;
       }
