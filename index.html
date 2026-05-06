@@ -2081,7 +2081,9 @@ function gsLoadCamps(cb) {
   })
   .then(function(rows) {
     IS_LOADING_SHEETS = false;
+    console.log('[Rastru] Supabase returned', (rows||[]).length, 'campaigns');
     camps = (rows || []).map(rowToCamp);
+    console.log('[Rastru] camps after mapping:', camps.length, camps.map(function(c){return c.name;}));
     try { localStorage.setItem('rastru_camps_cache', JSON.stringify(camps)); } catch(e) {}
     if (typeof rDash === 'function') rDash();
     if (typeof rRepo === 'function' && pg === 'repository') rRepo();
@@ -2105,13 +2107,18 @@ function gsSaveCamp(camp) {
     body: JSON.stringify(row)
   })
   .then(function(r) {
-    if (!r.ok) throw new Error('HTTP ' + r.status);
+    if (!r.ok) {
+      return r.text().then(function(t){ throw new Error('HTTP ' + r.status + ': ' + t); });
+    }
+    return r.json();
+  })
+  .then(function(saved) {
+    console.log('[Rastru] gsSaveCamp OK:', JSON.stringify(saved).slice(0,200));
     showSyncStatus('ok');
-    /* Update localStorage cache */
     try { localStorage.setItem('rastru_camps_cache', JSON.stringify(camps)); } catch(e) {}
   })
   .catch(function(err) {
-    console.error('[Rastru] gsSaveCamp error:', err);
+    console.error('[Rastru] gsSaveCamp ERROR:', err.message);
     showSyncStatus('error');
   });
 }
@@ -2122,8 +2129,11 @@ function gsDeleteCamp(id) {
     method: 'DELETE',
     headers: sbHeaders()
   })
-  .then(function(r) { if (!r.ok) throw new Error('HTTP ' + r.status); })
-  .catch(function(err) { console.error('[Rastru] gsDeleteCamp error:', err); });
+  .then(function(r) { 
+    console.log('[Rastru] gsDeleteCamp status:', r.status);
+    if (!r.ok) throw new Error('HTTP ' + r.status); 
+  })
+  .catch(function(err) { console.error('[Rastru] gsDeleteCamp ERROR:', err.message); });
 }
 
 /* Connection init — no token needed, key is permanent */
@@ -2270,65 +2280,10 @@ function lcLabel(lc) {
 
 
 <!-- NOTION STATUS PILL -->
-<div id="sync-status-pill" style="position:fixed;bottom:80px;right:24px;display:none;align-items:center;gap:6px;background:var(--sf0);border:0.5px solid var(--ov);border-radius:9999px;padding:5px 13px;cursor:pointer;z-index:88;box-shadow:var(--sh);font-family:var(--font)" onclick="openNotionSetup()" title="Configurar Notion"></div>
+
 
 <!-- NOTION SETUP MODAL -->
-<div id="notion-setup-modal" style="position:fixed;inset:0;background:rgba(22,23,43,.55);z-index:9500;display:flex;align-items:center;justify-content:center;padding:22px;opacity:0;pointer-events:none;transition:opacity .26s ease" onclick="if(event.target===this)closeNotionSetup()">
-  <div onclick="event.stopPropagation()" style="background:var(--sf0);border-radius:22px;width:100%;max-width:560px;box-shadow:0 24px 80px rgba(22,23,43,.26);overflow:hidden;transform:translateY(16px) scale(.97);transition:all .32s cubic-bezier(.34,1.56,.64,1)">
-    <div style="background:linear-gradient(135deg,#1A1A2E,#16213E,#0F3460);padding:22px 26px;display:flex;align-items:center;gap:14px">
-      <div style="width:42px;height:42px;border-radius:12px;background:rgba(255,255,255,.12);display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:20px;font-weight:900;color:#fff;letter-spacing:-1px">N</div>
-      <div style="flex:1">
-        <div style="font-size:16px;font-weight:800;color:#fff;letter-spacing:-.3px">Conectar ao Notion</div>
-        <div style="font-size:11.5px;color:rgba(255,255,255,.55);margin-top:2px">Banco de dados permanente para suas campanhas</div>
-      </div>
-      <button onclick="closeNotionSetup()" style="background:rgba(255,255,255,.12);border:none;cursor:pointer;color:#fff;width:28px;height:28px;border-radius:9999px;font-size:14px;font-weight:700;display:flex;align-items:center;justify-content:center">✕</button>
-    </div>
-    <div style="padding:24px 26px">
-      <div id="ns-status" style="margin-bottom:16px"></div>
-      <div style="background:var(--sfl);border-radius:14px;padding:14px 17px;margin-bottom:18px">
-        <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--txv);opacity:.5;margin-bottom:10px">Como configurar em 3 passos</div>
-        <div style="display:flex;flex-direction:column;gap:10px">
-          <div style="display:flex;gap:11px;align-items:flex-start;font-size:12.5px;color:var(--txv)">
-            <span style="width:20px;height:20px;border-radius:9999px;background:var(--pu);color:#fff;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:800;flex-shrink:0">1</span>
-            <div>Acesse <strong style="color:var(--pu)">notion.so/my-integrations</strong> → crie integração "Rastru" → copie o <strong>Internal Integration Token</strong></div>
-          </div>
-          <div style="display:flex;gap:11px;align-items:flex-start;font-size:12.5px;color:var(--txv)">
-            <span style="width:20px;height:20px;border-radius:9999px;background:var(--pu);color:#fff;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:800;flex-shrink:0">2</span>
-            <div>Crie um Database no Notion com as propriedades listadas abaixo. Clique em "..." → "Connect to" → selecione "Rastru". Copie o <strong>Database ID</strong> da URL</div>
-          </div>
-          <div style="display:flex;gap:11px;align-items:flex-start;font-size:12.5px;color:var(--txv)">
-            <span style="width:20px;height:20px;border-radius:9999px;background:var(--pu);color:#fff;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:800;flex-shrink:0">3</span>
-            <div>Cole token e ID abaixo → clique <strong>Salvar e Conectar</strong></div>
-          </div>
-        </div>
-        <button onclick="createNotionTemplate()" style="margin-top:12px;background:none;border:1px solid var(--ov);border-radius:9999px;padding:6px 14px;font-size:11.5px;color:var(--pu);cursor:pointer;font-family:var(--font)">Ver propriedades necessárias →</button>
-        <div id="ns-props-panel" style="display:none;margin-top:12px;max-height:180px;overflow-y:auto"><div id="ns-prop-list"></div></div>
-      </div>
-      <div style="margin-bottom:13px">
-        <label style="font-size:11px;font-weight:700;color:var(--txv);display:block;margin-bottom:5px">Integration Token</label>
-        <input id="ns-token" type="password" class="fc" placeholder="secret_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" autocomplete="off">
-      </div>
-      <div style="margin-bottom:13px">
-        <label style="font-size:11px;font-weight:700;color:var(--txv);display:block;margin-bottom:5px">Database ID</label>
-        <input id="ns-dbid" class="fc" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" autocomplete="off">
-      </div>
-      <div id="ns-err" style="display:none;font-size:12px;color:var(--rd);padding:8px 12px;background:var(--rdc);border-radius:9px;margin-bottom:12px"></div>
-      <div style="display:flex;gap:8px;justify-content:space-between;align-items:center">
-        <button onclick="disconnectNotion()" style="background:none;border:1px solid var(--ov);border-radius:9999px;padding:7px 14px;font-size:12px;color:var(--rd);cursor:pointer;font-family:var(--font)">Desconectar</button>
-        <div style="display:flex;gap:8px">
-          <button onclick="closeNotionSetup()" class="btn btn-t btn-sm">Cancelar</button>
-          <button id="ns-save-btn" onclick="testAndSaveNotion()" class="btn btn-f btn-sm">
-            <span class="ms sm">sync</span>Salvar e Conectar
-          </button>
-        </div>
-      </div>
-      <div style="margin-top:16px;padding:11px 13px;background:rgba(83,65,205,.06);border-radius:10px;border:1px solid var(--pfd);font-size:11.5px;color:var(--txv);line-height:1.55">
-        <span class="ms sm fill" style="color:var(--pu);font-size:13px;vertical-align:middle;margin-right:5px">info</span>
-        Token salvo apenas no <strong>localStorage</strong> do navegador. Para equipe: cada membro configura seu token com acesso ao mesmo database.
-      </div>
-    </div>
-  </div>
-</div>
+
 
 <!-- DEV BAR — owner only -->
 <div class="dev-bar" id="dev-bar" style="display:none">
