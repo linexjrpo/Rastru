@@ -1966,454 +1966,205 @@ function demoPrev(){if(demoStep>0){demoStep--;renderDemoStep();}}
    RASTRU v6 — NOTION LAYER
 ══════════════════════════════════════ */
 
-/* ── GOOGLE SHEETS SYNC ── */
-var GS_CFG = { url: '', enabled: false };
+/* ── SUPABASE DB ── 
+   Banco real, sem redirect, sem CORS.
+   Key expira em 2093. Permanente.
+*/
+var SB_URL = 'https://wsjfelnpxuxvpiorupsl.supabase.co/rest/v1';
+var SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndzamZlbG5weHV4dnBpb3J1cHNsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzgwODUxNzksImV4cCI6MjA5MzY2MTE3OX0.w27LsRWiglhPF8mNVeVV1kGgWzH2ETNbk41wlQgY39Q';
+var IS_LOADING_SHEETS = false;
 
-/* Default URL — auto-configured for all users */
-var GS_DEFAULT_URL = 'https://script.google.com/macros/s/AKfycbyYbri4dxGxfyhVEFF-_Uew7w4xSNOVILO-Q74Y7TzzoMJRIwfmiXPZSsdvByR11sT2yA/exec';
-
-function gsLoad() {
-  try {
-    var saved = localStorage.getItem('rastru_gs_url') || GS_DEFAULT_URL;
-    if (saved) { GS_CFG.url = saved; GS_CFG.enabled = true; }
-  } catch(e) {
-    GS_CFG.url = GS_DEFAULT_URL;
-    GS_CFG.enabled = true;
-  }
+function sbHeaders() {
+  return {
+    'apikey': SB_KEY,
+    'Authorization': 'Bearer ' + SB_KEY,
+    'Content-Type': 'application/json',
+    'Prefer': 'return=representation'
+  };
 }
 
-function gsSave(url) {
-  GS_CFG.url = url;
-  GS_CFG.enabled = !!url;
-  try { localStorage.setItem('rastru_gs_url', url); } catch(e) {}
+/* Map Rastru camp fields ↔ Supabase columns */
+function campToRow(camp) {
+  return {
+    id: String(camp.id),
+    name: camp.name || '',
+    client: camp.client || '',
+    celula: camp.celula || '',
+    status: camp.status || 'active',
+    lc: camp.lc || 'rascunho',
+    result: camp.result || null,
+    squad: camp.squad || [],
+    kpis: camp.kpis || [],
+    tags: camp.tags || [],
+    entries: camp.entries || [],
+    created_at: camp.createdAt || new Date().toISOString().slice(0,10),
+    created_by: camp.createdBy || '',
+    notify_on_close: camp.notifyOnClose !== false,
+    objective: camp.objective || '',
+    notes: camp.notes || '',
+    start_date: camp.start || '',
+    end_date: camp.end || '',
+    pain: camp.pain || '',
+    success_def: camp.successDef || '',
+    journey: camp.journey || '',
+    ds: camp.ds || 'manual',
+    privacy: camp.privacy || 'public',
+    works: camp.works || [],
+    didnt: camp.didnt || [],
+    opps: camp.opps || [],
+    materials: camp.materials || [],
+    links: camp.links || [],
+    versions: camp.versions || [],
+    updated_at: new Date().toISOString()
+  };
 }
 
-function gsClear() {
-  GS_CFG = { url: '', enabled: false };
-  try { localStorage.removeItem('rastru_gs_url'); } catch(e) {}
+function rowToCamp(row) {
+  return {
+    id: row.id,
+    name: row.name,
+    client: row.client,
+    celula: row.celula,
+    status: row.status,
+    lc: row.lc,
+    result: row.result,
+    squad: row.squad || [],
+    kpis: row.kpis || [],
+    tags: row.tags || [],
+    entries: row.entries || [],
+    createdAt: row.created_at,
+    createdBy: row.created_by,
+    notifyOnClose: row.notify_on_close !== false,
+    objective: row.objective,
+    notes: row.notes,
+    start: row.start_date,
+    end: row.end_date,
+    pain: row.pain,
+    successDef: row.success_def,
+    journey: row.journey,
+    ds: row.ds || 'manual',
+    privacy: row.privacy || 'public',
+    works: row.works || [],
+    didnt: row.didnt || [],
+    opps: row.opps || [],
+    materials: row.materials || [],
+    links: row.links || [],
+    versions: row.versions || []
+  };
 }
 
-/* Fetch all camps from sheet */
+/* Load all campaigns from Supabase */
 function gsLoadCamps(cb) {
-  if (!GS_CFG.enabled || !GS_CFG.url) return;
+  IS_LOADING_SHEETS = true;
 
-  /* Restore from localStorage cache instantly (before Sheets responds) */
+  /* Restore from localStorage cache instantly */
   try {
     var cached = localStorage.getItem('rastru_camps_cache');
     if (cached) {
-      var cachedCamps = JSON.parse(cached);
-      if (cachedCamps && cachedCamps.length > 0) {
-        camps = cachedCamps;
+      var cc = JSON.parse(cached);
+      if (cc && cc.length > 0) {
+        camps = cc;
         if (typeof rDash === 'function') rDash();
         if (typeof rRepo === 'function' && pg === 'repository') rRepo();
       }
     }
   } catch(e) {}
 
-  IS_LOADING_SHEETS = true;
   showSyncStatus('syncing');
 
-  fetch(GS_CFG.url + '?action=load')
-    .then(function(r) { return r.json(); })
-    .then(function(data) {
-      IS_LOADING_SHEETS = false;
-      if (data.camps) {
-        camps = data.camps.map(function(c) {
-          c.id = c.id || Date.now();
-          return c;
-        });
-        /* Update localStorage cache */
-        try { localStorage.setItem('rastru_camps_cache', JSON.stringify(camps)); } catch(e) {}
-        if (typeof rDash === 'function') rDash();
-        if (typeof rRepo === 'function' && pg === 'repository') rRepo();
-      }
-      showSyncStatus('ok');
-      if (cb) cb(data.camps || []);
-    })
-    .catch(function(err) {
-      IS_LOADING_SHEETS = false;
-      console.error('[Rastru] gsLoadCamps error:', err);
-      showSyncStatus('error');
-      /* Keep showing cached data on error */
-      if (typeof rDash === 'function') rDash();
-    });
+  fetch(SB_URL + '/campaigns?select=*&order=created_at.desc', {
+    headers: sbHeaders()
+  })
+  .then(function(r) {
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    return r.json();
+  })
+  .then(function(rows) {
+    IS_LOADING_SHEETS = false;
+    camps = (rows || []).map(rowToCamp);
+    try { localStorage.setItem('rastru_camps_cache', JSON.stringify(camps)); } catch(e) {}
+    if (typeof rDash === 'function') rDash();
+    if (typeof rRepo === 'function' && pg === 'repository') rRepo();
+    showSyncStatus('ok');
+    if (cb) cb(camps);
+  })
+  .catch(function(err) {
+    IS_LOADING_SHEETS = false;
+    console.error('[Rastru] gsLoadCamps error:', err);
+    showSyncStatus('error');
+    if (typeof rDash === 'function') rDash();
+  });
 }
 
-/* Save single camp to sheet */
+/* Save / upsert a campaign */
 function gsSaveCamp(camp) {
-  if (!GS_CFG.enabled || !GS_CFG.url) return;
-  /* Use no-cors POST — Google Apps Script POST redirect workaround */
-  /* Slim the camp object to stay under URL limits */
-  var slim = {
-    id: camp.id, name: camp.name, client: camp.client, celula: camp.celula,
-    status: camp.status, lc: camp.lc, result: camp.result,
-    squad: camp.squad||[], kpis: camp.kpis||[], tags: camp.tags||[],
-    entries: camp.entries||[], createdAt: camp.createdAt, createdBy: camp.createdBy,
-    notifyOnClose: camp.notifyOnClose, objective: camp.objective||'',
-    notes: camp.notes||'', start: camp.start||'', end: camp.end||'',
-    pain: camp.pain||'', successDef: camp.successDef||'', journey: camp.journey||'',
-    works: camp.works||[], didnt: camp.didnt||[], opps: camp.opps||[],
-    ds: camp.ds||'manual', privacy: camp.privacy||'public',
-    materials: camp.materials||[], links: camp.links||[], versions: camp.versions||[]
-  };
-  var encoded = encodeURIComponent(JSON.stringify(slim));
-  var url = GS_CFG.url + '?action=save&data=' + encoded;
-  /* Use no-cors to avoid redirect issues — fire and forget */
-  fetch(url, { method: 'POST', mode: 'no-cors' })
-    .then(function() { showSyncStatus('ok'); })
-    .catch(function(err) {
-      /* Fallback: try GET */
-      fetch(url).then(function() { showSyncStatus('ok'); })
-        .catch(function(e) { console.error('[Rastru] gsSaveCamp error:', e); showSyncStatus('error'); });
-    });
+  var row = campToRow(camp);
+  fetch(SB_URL + '/campaigns', {
+    method: 'POST',
+    headers: Object.assign({}, sbHeaders(), {'Prefer': 'resolution=merge-duplicates,return=representation'}),
+    body: JSON.stringify(row)
+  })
+  .then(function(r) {
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    showSyncStatus('ok');
+    /* Update localStorage cache */
+    try { localStorage.setItem('rastru_camps_cache', JSON.stringify(camps)); } catch(e) {}
+  })
+  .catch(function(err) {
+    console.error('[Rastru] gsSaveCamp error:', err);
+    showSyncStatus('error');
+  });
 }
 
-/* Delete camp from sheet */
+/* Delete a campaign */
 function gsDeleteCamp(id) {
-  if (!GS_CFG.enabled || !GS_CFG.url) return;
-  fetch(GS_CFG.url + '?action=delete&id=' + id)
-    .then(function(r) { return r.json(); })
-    .catch(function(err) { console.error('[Rastru] gsDeleteCamp error:', err); });
+  fetch(SB_URL + '/campaigns?id=eq.' + encodeURIComponent(String(id)), {
+    method: 'DELETE',
+    headers: sbHeaders()
+  })
+  .then(function(r) { if (!r.ok) throw new Error('HTTP ' + r.status); })
+  .catch(function(err) { console.error('[Rastru] gsDeleteCamp error:', err); });
 }
 
-/* Test the Apps Script URL */
-function gsTestAndSave() {
-  var urlEl = ge('gs-url-input');
-  var errEl = ge('gs-err');
-  var btn   = ge('gs-save-btn');
-  if (!urlEl || !errEl) return;
-
-  var url = (urlEl.value || '').trim();
-  errEl.style.display = 'none';
-
-  if (!url || !url.startsWith('https://script.google.com/')) {
-    errEl.textContent = 'URL inválida. Deve começar com https://script.google.com/';
-    errEl.style.display = 'block';
-    return;
-  }
-
-  btn.textContent = 'Testando…';
-  btn.disabled = true;
-
-  fetch(url + '?action=health')
-    .then(function(r) { return r.json(); })
-    .then(function(data) {
-      if (data.ok) {
-        gsSave(url);
-        btn.textContent = 'Conectado ✓';
-        btn.style.background = 'var(--gn)';
-        btn.disabled = false;
-        showSyncStatus('ok');
-        showToast('✅', 'Google Sheets conectado!', 'Carregando campanhas…');
-        setTimeout(function() {
-          closeGsSetup();
-          gsLoadCamps();
-        }, 800);
-      } else {
-        throw new Error(data.error || 'Resposta inválida');
-      }
-    })
-    .catch(function(err) {
-      errEl.textContent = 'Falha: ' + err.message + '. Verifique se publicou como Web App com acesso "Anyone".';
-      errEl.style.display = 'block';
-      btn.textContent = 'Salvar e Conectar';
-      btn.disabled = false;
-    });
+/* Connection init — no token needed, key is permanent */
+function gsLoad() {
+  /* Key is hardcoded — always connected */
 }
 
+function gsSave(url) {}
+function gsClear() {}
 function showSyncStatus(state) {
   var el = ge('sync-status-pill');
   if (!el) return;
   var states = {
-    ok:      { bg: 'rgba(0,108,75,.12)', color: 'var(--gn)', dot: 'var(--gn)', text: 'Sheets sincronizado' },
-    syncing: { bg: 'rgba(83,65,205,.1)', color: 'var(--pu)', dot: 'var(--pu)', text: 'Sincronizando…' },
-    error:   { bg: 'rgba(186,26,26,.1)', color: 'var(--rd)', dot: 'var(--rd)', text: 'Erro na sincronização' },
-    off:     { bg: 'var(--sfl)',         color: 'var(--txv)',dot: 'rgba(0,0,0,.2)', text: 'Offline' }
+    ok:      { bg: 'rgba(0,108,75,.12)',   color: 'var(--gn)', dot: 'var(--gn)',  text: 'Supabase ✓' },
+    syncing: { bg: 'rgba(83,65,205,.1)',   color: 'var(--pu)', dot: 'var(--pu)', text: 'Sincronizando…' },
+    error:   { bg: 'rgba(186,26,26,.1)',   color: 'var(--rd)', dot: 'var(--rd)', text: 'Erro na sincronização' },
+    off:     { bg: 'var(--sfl)',           color: 'var(--txv)',dot: 'rgba(0,0,0,.2)', text: 'Offline' }
   };
   var s = states[state] || states.off;
   el.style.background = s.bg;
   el.innerHTML = '<span style="width:6px;height:6px;border-radius:50%;background:' + s.dot + ';' + (state==='syncing'?'animation:lp 1s infinite':'') + '"></span><span style="font-size:11px;font-weight:600;color:' + s.color + '">' + s.text + '</span>';
 }
 
-function openGsSetup() {
-  var modal = ge('gs-setup-modal');
-  if (modal) {
-    modal.style.display = 'flex';
-    var urlEl = ge('gs-url-input');
-    if (urlEl && GS_CFG.url) urlEl.value = GS_CFG.url;
-    updateGsStatus();
-  }
-}
-
-function closeGsSetup() {
-  var modal = ge('gs-setup-modal');
-  if (modal) modal.style.display = 'none';
-}
-
-function updateGsStatus() {
-  var el = ge('gs-status-row');
-  if (!el) return;
-  if (GS_CFG.enabled) {
-    el.innerHTML = '<div style="display:flex;align-items:center;gap:6px;padding:10px 14px;background:rgba(0,108,75,.08);border-radius:10px;border:1px solid rgba(0,108,75,.2)"><span style="width:7px;height:7px;border-radius:50%;background:var(--gn)"></span><span style="font-size:12px;font-weight:600;color:var(--gn)">Sheets conectado e ativo</span></div>';
-  } else {
-    el.innerHTML = '<div style="font-size:12px;color:var(--txv);opacity:.5;padding:8px 0">Não conectado — dados salvos localmente</div>';
-  }
-}
-
-function gsDisconnect() {
-  gsClear();
-  updateGsStatus();
-  showSyncStatus('off');
-  showToast('○', 'Desconectado', 'Usando dados locais.');
-}
-
-/* Legacy Notion stubs — manter compatibilidade com código existente */
+/* Keep these stubs for UI compatibility */
+function openGsSetup() { showToast('✅','Supabase ativo','Banco de dados sempre conectado.'); }
+function closeGsSetup() {}
+function gsTestAndSave() {}
+function gsDisconnect() {}
+function updateGsStatus() {}
+function openNotionSetup() { openGsSetup(); }
+function closeNotionSetup() {}
+function testAndSaveNotion() {}
+function updateSetupStatus() {}
+function disconnectNotion() {}
 var NOTION_CFG = { token: '', dbId: '', enabled: false };
-function notionLoad() { gsLoad(); }
-function notionSync(silent) { gsLoadCamps(); }
+function notionLoad() {}
+function notionSync() { gsLoadCamps(); }
 function notionCreate(camp) { gsSaveCamp(camp); }
 function notionUpdate(camp) { gsSaveCamp(camp); }
-function notionSave(t, d) {}
-function notionClear() { gsDisconnect(); }
-function showNotionStatus(s) { showSyncStatus(s); }
-function openNotionSetup() { openGsSetup(); }
-function closeNotionSetup() { closeGsSetup(); }
-function testAndSaveNotion() { gsTestAndSave(); }
-function updateSetupStatus() { updateGsStatus(); }
-function disconnectNotion() { gsDisconnect(); }
-
-
-
-
-
-function createNotionTemplate() {
-  var props = [
-    'Name (title) — nome da campanha', 'Cliente (text)', 'Celula (text)',
-    'Status (select: active, paused, completed)',
-    'Ciclo de Vida (select: rascunho, aprovacao, ativa, analise, finalizada, arquivada)',
-    'Resultado (select: success, partial, failure)', 'Privacidade (select: public, squad)',
-    'Fonte de Dados (select: manual, powerbi, databricks)',
-    'Data Inicio (date)', 'Data Fim (date)', 'Objetivo (text)', 'Dor (text)',
-    'Definicao de Sucesso (text)', 'Jornada (text)', 'Notas (text)', 'Criado Por (text)',
-    'Entry Points (multi-select)', 'Tags (multi-select)', 'Integracoes (multi-select)',
-    'Squad (text JSON)', 'KPIs (text JSON)', 'O Que Funcionou (text JSON)',
-    'O Que Nao Funcionou (text JSON)', 'Oportunidades (text JSON)',
-    'Materiais (text JSON)', 'Versoes (text JSON)'
-  ];
-  var el = ge('ns-prop-list');
-  if (!el) return;
-  el.innerHTML = props.map(function(p) {
-    return '<div style="display:flex;align-items:flex-start;gap:7px;padding:5px 0;border-bottom:1px solid rgba(200,196,215,.1);font-size:12px;color:var(--txv)"><span style="color:var(--gn);font-size:10.5px;margin-top:1px">✓</span>' + p + '</div>';
-  }).join('');
-  ge('ns-props-panel').style.display = 'block';
-}
-
-/* Override mkCamp */
-var _origMkCamp = mkCamp;
-mkCamp = function() {
-  _origMkCamp();
-  if (NOTION_CFG.enabled && camps[0] && !camps[0].notionId) {
-    notionCreate(camps[0]);
-  }
-};
-
-/* Override saveField to also sync edits */
-var _origSaveField = saveField;
-saveField = function(campId, field, newVal) {
-  _origSaveField(campId, field, newVal);
-  var c = camps.find(function(x) { return x.id == campId; });
-  if (NOTION_CFG.enabled && c) notionUpdate(c);
-};
-
-/* Auto-sync every 60 seconds */
-setInterval(function() {
-  if (NOTION_CFG.enabled && !notionSyncing) notionSync(true);
-}, 60000);
-
-
-/* ── CANVA INTEGRATION ── */
-function openInCanva(){
-  var c=pptCampForAud;
-  if(!c){closePAD();return;}
-  var aud=selectedAud||'executive';
-  var audLbl={'executive':'Executivo','ux':'Portfólio UX','strategy':'Estratégia'}[aud]||'Executivo';
-  /* Build a Canva presentation search URL with the campaign context as query */
-  var query=encodeURIComponent('Briefing '+audLbl+' - '+c.name+' - '+c.client);
-  /* Canva deep link to create a new presentation from scratch */
-  var canvaUrl='https://www.canva.com/design/create?type=presentation&query='+query;
-  window.open(canvaUrl,'_blank');
-  closePAD();
-  showToast('🎨','Abrindo Canva','Crie sua apresentação com os dados do Rastru.');
-}
-
-
-/* ═══ DEV MODE ═══ */
-var DEV_VIEW = 'usr'; // 'dev' or 'usr'
-
-function initDevMode(){
-  if(ge('dev-bar'))ge('dev-bar').style.display='none';
-  if(ge('dev-indicator'))ge('dev-indicator').style.display='none';
-  if(!CURRENT_USER.isOwner)return;
-  var bar=ge('dev-bar');
-  if(bar)bar.style.display='flex';
-  updateDevNotion();
-}
-
-function setDevView(mode){
-  DEV_VIEW=mode;
-  document.body.classList.toggle('dev-view', mode==='dev');
-  var ind=ge('dev-indicator');
-  if(ind){
-    ind.style.display='block';
-    ind.className='dev-view-indicator '+(mode==='dev'?'dev':'usr');
-    ind.textContent=mode==='dev'?'👩‍💻 DEV VIEW':'👤 USER VIEW';
-  }
-  ge('dev-toggle-dev').className='dev-tag '+(mode==='dev'?'on':'off');
-  ge('dev-toggle-usr').className='dev-tag '+(mode==='usr'?'on':'off');
-  var nb=document.querySelector('.sb-notion-btn');
-  if(nb)nb.style.display=(CURRENT_USER.isOwner&&mode==='dev')?'flex':'none';
-  var ns=ge('notion-status');
-  if(ns)ns.style.display=(CURRENT_USER.isOwner&&mode==='dev')?'flex':'none';
-  if(pg==='dashboard')rDash();
-  if(pg==='repository')rRepo();
-  // Re-render current page to reflect view
-  if(pg==='dashboard')rDash();
-  if(pg==='repository')rRepo();
-}
-
-function updateDevNotion(){
-  var el=ge('dev-notion-status');
-  if(!el)return;
-  el.textContent=NOTION_CFG.enabled?'✓ conectado (DB: '+NOTION_CFG.dbId.slice(0,8)+'...)':'✗ offline';
-}
-
-function devClearLocalStorage(){
-  try{
-    // Only clear auth/config — NOT camp data (stored in Google Sheets)
-    localStorage.removeItem('rastru_gs_url');
-    localStorage.removeItem('rastru_dev_view');
-    // Clear member passwords (dev only)
-    var keys=[];
-    for(var i=0;i<localStorage.length;i++){var k=localStorage.key(i);if(k&&k.startsWith('rastru_'))keys.push(k);}
-    keys.forEach(function(k){localStorage.removeItem(k);});
-    showToast('🗑','Config limpa','Recarregue. Dados das campanhas estão no Sheets.');
-  }catch(e){}
-}
-
-
-function escHtml(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
-
-function saveEdits(campId){
-  var camp=camps.find(function(x){return x.id==campId;});
-  if(!camp)return;
-  var pairs=[
-    ['edit-name-'+campId,'name'],
-    ['edit-client-'+campId,'client'],
-    ['edit-celula-'+campId,'celula'],
-    ['edit-lc-'+campId,'lc'],
-    ['edit-objective-'+campId,'objective'],
-    ['edit-pain-'+campId,'pain'],
-    ['edit-journey-'+campId,'journey'],
-    ['edit-notes-'+campId,'notes'],
-    ['edit-result-'+campId,'result']
-  ];
-  var changed=0;
-  pairs.forEach(function(p){
-    var el=ge(p[0]);
-    if(!el)return;
-    var nv=el.value;
-    if(nv!==String(camp[p[1]]||'')){saveField(campId,p[1],nv);changed++;}
-  });
-  if(!changed)showToast('ℹ️','Sem alterações','Nenhum campo modificado.');
-  rDet(campId);
-}
-
-function cancelEdit(campId){rDet(campId);}
-
-function deleteCamp(campId){
-  var camp=camps.find(function(x){return x.id==campId;});
-  if(!camp)return;
-  if(!confirm('Excluir "'+camp.name+'"? Esta ação não pode ser desfeita.'))return;
-  camps=camps.filter(function(x){return x.id!=campId;});
-  if(NOTION_CFG.enabled&&camp.notionId){
-    notionFetch('/pages/'+camp.notionId,'PATCH',{archived:true}).catch(function(){});
-  }
-  gsDeleteCamp(campId);
-  showToast('🗑','Campanha excluída',camp.name);
-  goTo('dashboard');
-}
-
-
-/* ── KPI FILE IMPORT ── */
-function importKpiFile(event){
-  var file=event.target.files[0];
-  if(!file)return;
-  var ext=file.name.split('.').pop().toLowerCase();
-  var parseCSV=function(text){
-    var lines=text.split(/\r?\n/).filter(Boolean);
-    var imported=0;
-    lines.forEach(function(line,i){
-      if(i===0&&line.toLowerCase().replace(/"/g,'').split(/[,;]/)[0].trim()==='nome')return;
-      var cols=line.split(/[,;]/).map(function(s){return s.trim().replace(/^"|"$/g,'');});
-      if(!cols[0])return;
-      var kpi={name:cols[0],meta:parseFloat(cols[1])||0,result:(cols[2]&&cols[2]!=='')?parseFloat(cols[2]):null,id:Date.now()+imported};
-      if(!wd.kpis.find(function(k){return k.name===kpi.name;}))wd.kpis.push(kpi);
-      imported++;
-    });
-    rKpis();
-    showToast('\u{1F4CA}',imported+' KPIs importados','Via '+file.name);
-  };
-  var reader=new FileReader();
-  if(ext==='csv'){
-    reader.onload=function(e){parseCSV(e.target.result);};
-    reader.readAsText(file,'UTF-8');
-  } else {
-    reader.onload=function(e){
-      try{
-        if(typeof XLSX!=='undefined'){
-          var wb=XLSX.read(e.target.result,{type:'binary'});
-          var ws=wb.Sheets[wb.SheetNames[0]];
-          var rows=XLSX.utils.sheet_to_json(ws,{header:1,defval:''});
-          var csv=rows.map(function(r){return r.join(',');}).join('\n');
-          parseCSV(csv);
-        } else {
-          showToast('\u26A0\uFE0F','XLSX requer SheetJS','Use CSV por enquanto.');
-        }
-      }catch(err){showToast('\u26A0\uFE0F','Erro ao ler XLSX',err.message);}
-    };
-    reader.readAsBinaryString(file);
-  }
-  event.target.value='';
-}
-
-/* ── DUPLICATE CAMPAIGN ── */
-function dupCamp(campId){
-  var orig=camps.find(function(x){return x.id==campId;});
-  if(!orig)return;
-  var nc=JSON.parse(JSON.stringify(orig));
-  nc.id=Date.now();
-  nc.name='Cópia de '+orig.name;
-  delete nc.notionId;
-  nc.createdAt=new Date().toISOString().slice(0,10);
-  nc.createdBy=CURRENT_USER.email;
-  nc.versions=[];
-  nc.lc='rascunho';
-  nc.status='active';
-  camps.unshift(nc);
-  gsSaveCamp(nc); /* Sync to Sheets */
-  if(NOTION_CFG.enabled)notionCreate(nc);
-  showToast('\u29E7','Campanha duplicada',nc.name);
-  goTo('detail',nc.id);
-}
-
-
-function toggleNotify(campId, val){
-  var camp=camps.find(function(x){return x.id==campId;});
-  if(!camp)return;
-  camp.notifyOnClose=val;
-  if(NOTION_CFG.enabled)notionUpdate(camp);
-  showToast(val?'🔔':'🔕', val?'Notificação ativada':'Desativada','Membros '+(val?'serão':'não serão')+' notificados ao encerrar.');
-}
+function notionSave() {}
+function notionClear() {}
 
 /* Init on load — credentials pre-configured */
 /* Restore session if page was refreshed */
