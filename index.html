@@ -2082,13 +2082,14 @@ function gsLoadCamps(cb) {
   })
   .then(function(rows) {
     IS_LOADING_SHEETS = false;
-    console.log('[Rastru] Supabase returned', (rows||[]).length, 'campaigns');
-    camps = (rows || []).map(rowToCamp);
-    console.log('[Rastru] camps after mapping:', camps.length, camps.map(function(c){return c.name;}));
+    var fetched = (rows || []).map(rowToCamp);
+    console.log('[Rastru] Supabase returned', fetched.length, 'campaigns:', fetched.map(function(x){return x.name;}));
+    /* Always update — Supabase is source of truth */
+    camps = fetched;
     try { localStorage.setItem('rastru_camps_cache', JSON.stringify(camps)); } catch(e) {}
     if (typeof rDash === 'function') rDash();
     if (typeof rRepo === 'function' && pg === 'repository') rRepo();
-    showSyncStatus('ok');
+    showSyncStatus(camps.length > 0 ? 'ok' : 'ok');
     if (cb) cb(camps);
   })
   .catch(function(err) {
@@ -2140,6 +2141,12 @@ function gsDeleteCamp(id) {
 /* Connection init — no token needed, key is permanent */
 function gsLoad() {
   /* Key is hardcoded — always connected */
+  /* Test connection on startup */
+  fetch(SB_URL + '/campaigns?select=id&limit=1', { headers: sbHeaders() })
+    .then(function(r) { 
+      console.log('[Rastru] Supabase connection test:', r.status, r.status === 200 ? 'OK' : 'FAILED');
+    })
+    .catch(function(e) { console.error('[Rastru] Supabase unreachable:', e.message); });
 }
 
 function gsSave(url) {}
