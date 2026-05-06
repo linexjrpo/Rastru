@@ -2166,6 +2166,20 @@ function notionUpdate(camp) { gsSaveCamp(camp); }
 function notionSave() {}
 function notionClear() {}
 
+
+/* ── UTILITY HELPERS ── */
+function escHtml(s) {
+  return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function lcLabel(lc) {
+  var m = {
+    rascunho: 'Rascunho', aprovacao: 'Aguard. aprovação', ativa: 'Ativa',
+    analise: 'Em análise', finalizada: 'Finalizada', arquivada: 'Arquivada'
+  };
+  return m[lc] || lc || '—';
+}
+
 /* Init on load — credentials pre-configured */
 /* Restore session if page was refreshed */
 (function(){
