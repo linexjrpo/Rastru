@@ -1415,7 +1415,7 @@ function mkCamp(){
   var already=sq.some(function(s){return s.email===creatorEmail});
   if(!already){sq.unshift({name:CURRENT_USER.firstName,role:'Criador(a)',email:creatorEmail,permission:'admin',id:Date.now()});}
   else{sq=sq.map(function(s){return s.email===creatorEmail?Object.assign({},s,{permission:'admin'}):s;});}
-  var nc={id:Date.now(),name:wd.name||'Nova Campanha',client:wd.client||'Sem cliente',status:wd.status||'active',lc:wd.lc||'rascunho',type:'whatsapp',entries:wd.entries||[],celula:wd.celula||'',result:wd.result||'partial',privacy:wd.privacy||'public',ds:wd.ds||'manual',start:wd.start||'',end:wd.end||'',objective:wd.objective||'',pain:wd.pain||'',successDef:wd.successDef||'',journey:wd.journey||'',squad:sq,tags:wd.tags||[],kpis:wd.kpis||[],integrations:wd.ints||[],materials:(wd.files||[]).map(function(f){return{name:f.name,size:f.size,ico:'📄'};}),notes:wd.notes||'',notifyOnClose:wd.notifyOnClose!==false,works:[],didnt:[],opps:[],links:wd.links||[],createdAt:new Date().toISOString().slice(0,10),createdBy:creatorEmail,versions:[]};
+  var nc={id:Date.now(),name:wd.name||'Nova Campanha',client:wd.client||'Sem cliente',status:wd.status||'active',lc:wd.lc||'rascunho',type:'whatsapp',entries:wd.entries||[],celula:wd.celula||'',result:wd.result||null,privacy:wd.privacy||'public',ds:wd.ds||'manual',start:wd.start||'',end:wd.end||'',objective:wd.objective||'',pain:wd.pain||'',successDef:wd.successDef||'',journey:wd.journey||'',squad:sq,tags:wd.tags||[],kpis:wd.kpis||[],integrations:wd.ints||[],materials:(wd.files||[]).map(function(f){return{name:f.name,size:f.size,ico:'📄'};}),notes:wd.notes||'',notifyOnClose:wd.notifyOnClose!==false,works:[],didnt:[],opps:[],links:wd.links||[],createdAt:new Date().toISOString().slice(0,10),createdBy:creatorEmail,versions:[]};
   camps.unshift(nc);ws=5;rWiz();
   /* Save to Google Sheets immediately */
   gsSaveCamp(nc);
@@ -1975,13 +1975,14 @@ var SB_URL = 'https://wsjfelnpxuxvpiorupsl.supabase.co/rest/v1';
 var SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndzamZlbG5weHV4dnBpb3J1cHNsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzgwODUxNzksImV4cCI6MjA5MzY2MTE3OX0.w27LsRWiglhPF8mNVeVV1kGgWzH2ETNbk41wlQgY39Q';
 var IS_LOADING_SHEETS = false;
 
-function sbHeaders() {
-  return {
+function sbHeaders(forWrite) {
+  var h = {
     'apikey': SB_KEY,
     'Authorization': 'Bearer ' + SB_KEY,
-    'Content-Type': 'application/json',
-    'Prefer': 'return=representation'
+    'Content-Type': 'application/json'
   };
+  if (forWrite) h['Prefer'] = 'return=representation';
+  return h;
 }
 
 /* Map Rastru camp fields ↔ Supabase columns */
@@ -2094,9 +2095,20 @@ function gsLoadCamps(cb) {
   })
   .catch(function(err) {
     IS_LOADING_SHEETS = false;
-    console.error('[Rastru] gsLoadCamps error:', err);
+    console.error('[Rastru] gsLoadCamps FAILED:', err.message, err);
     showSyncStatus('error');
+    /* On error, keep showing cached data */
+    if (camps.length === 0) {
+      try {
+        var cached = localStorage.getItem('rastru_camps_cache');
+        if (cached) {
+          camps = JSON.parse(cached);
+          console.log('[Rastru] Restored', camps.length, 'camps from cache after error');
+        }
+      } catch(e) {}
+    }
     if (typeof rDash === 'function') rDash();
+    if (typeof rRepo === 'function' && pg === 'repository') rRepo();
   });
 }
 
@@ -2105,7 +2117,7 @@ function gsSaveCamp(camp) {
   var row = campToRow(camp);
   fetch(SB_URL + '/campaigns', {
     method: 'POST',
-    headers: Object.assign({}, sbHeaders(), {'Prefer': 'resolution=merge-duplicates,return=representation'}),
+    headers: Object.assign({}, sbHeaders(true), {'Prefer': 'resolution=merge-duplicates,return=representation'}),
     body: JSON.stringify(row)
   })
   .then(function(r) {
@@ -2129,7 +2141,7 @@ function gsSaveCamp(camp) {
 function gsDeleteCamp(id) {
   fetch(SB_URL + '/campaigns?id=eq.' + encodeURIComponent(String(id)), {
     method: 'DELETE',
-    headers: sbHeaders()
+    headers: sbHeaders(false)
   })
   .then(function(r) { 
     console.log('[Rastru] gsDeleteCamp status:', r.status);
@@ -2142,7 +2154,7 @@ function gsDeleteCamp(id) {
 function gsLoad() {
   /* Key is hardcoded — always connected */
   /* Test connection on startup */
-  fetch(SB_URL + '/campaigns?select=id&limit=1', { headers: sbHeaders() })
+  fetch(SB_URL + '/campaigns?select=id&limit=1', { headers: sbHeaders(false) })
     .then(function(r) { 
       console.log('[Rastru] Supabase connection test:', r.status, r.status === 200 ? 'OK' : 'FAILED');
     })
