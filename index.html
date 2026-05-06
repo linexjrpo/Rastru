@@ -1004,7 +1004,7 @@ function loginSuccess(firstName,fullName,email,isOwner){
     updateOwnerUI();
     initDevMode();
     rDash();
-    IS_LOADING_SHEETS = true; gsLoadCamps(); /* Load camps from Google Sheets on login */
+    gsLoadCamps(); /* Load camps from Supabase on login */
     showToast('👋','Olá, '+firstName+'!','Crie uma campanha e você vira admin dela.');
   },350);
 }
@@ -1216,13 +1216,7 @@ function buildPPSlides(c,aud){
 
 /* ── DASHBOARD ── */
 function rDash(){
-  /* Loading state — show spinner while Sheets is loading */
-  if(IS_LOADING_SHEETS && camps.length === 0){
-    var _dl=ge('hstats');
-    if(_dl)_dl.innerHTML='<div style="display:flex;align-items:center;gap:8px;padding:14px 0"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--pu)" stroke-width="2.5" stroke-linecap="round" style="animation:spin 1s linear infinite"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg><span style="font-size:12.5px;color:var(--txv);margin-left:4px">Carregando campanhas…</span></div>';
-    var _br=ge('brow');if(_br)_br.innerHTML='';
-    return;
-  }
+  /* Renders immediately — Supabase updates async */
   var vc=visibleCamps();
   var tot=vc.length,act=vc.filter(function(c){return c.status==='active'}).length;
   var suc=vc.filter(function(c){return c.result==='success'}).length;
@@ -1263,7 +1257,7 @@ function rBentoCharts(){
   (function(){
   var brow=ge('brow');
   if(!brow)return;
-  if(vc.length === 0 && !IS_LOADING_SHEETS){
+  if(vc.length === 0){
     brow.innerHTML=
       '<div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">'+
       '<div class="bc" style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:32px 16px;gap:8px">'+
@@ -1883,11 +1877,6 @@ function swTab(t){
 
 /* ── REPOSITORY ── */
 function rRepo(){
-  if(IS_LOADING_SHEETS && camps.length === 0){
-    var _rl=ge('repo-list')||ge('dtb');
-    if(_rl)_rl.innerHTML='<div style="display:flex;align-items:center;gap:8px;padding:24px 16px"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--pu)" stroke-width="2.5" stroke-linecap="round" style="animation:spin 1s linear infinite"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg><span style="font-size:12.5px;color:var(--txv);margin-left:4px">Carregando campanhas…</span></div>';
-    return;
-  }
   var vc=visibleCamps();
   var cl=[...new Set(vc.map(function(c){return c.client}))];
   var tg=[...new Set(vc.flatMap(function(c){return c.tags||[]}))];
@@ -2082,7 +2071,6 @@ function gsLoadCamps(cb) {
     return r.json();
   })
   .then(function(rows) {
-    IS_LOADING_SHEETS = false;
     var fetched = (rows || []).map(rowToCamp);
     console.log('[Rastru] Supabase returned', fetched.length, 'campaigns:', fetched.map(function(x){return x.name;}));
     /* Always update — Supabase is source of truth */
@@ -2094,7 +2082,6 @@ function gsLoadCamps(cb) {
     if (cb) cb(camps);
   })
   .catch(function(err) {
-    IS_LOADING_SHEETS = false;
     console.error('[Rastru] gsLoadCamps FAILED:', err.message, err);
     showSyncStatus('error');
     /* On error, keep showing cached data */
@@ -2224,9 +2211,15 @@ function lcLabel(lc) {
         updateUserUI();
         updateOwnerUI();
         initDevMode();
-        rDash();
-        IS_LOADING_SHEETS = true;
-        setTimeout(function(){gsLoad();gsLoadCamps();},100);
+        gsLoad();
+        /* Load from cache first for instant display */
+        try {
+          var _cc=localStorage.getItem('rastru_camps_cache');
+          if(_cc){ camps=JSON.parse(_cc); rDash(); }
+          else { rDash(); }
+        } catch(e){ rDash(); }
+        /* Then fetch fresh from Supabase */
+        gsLoadCamps();
         return;
       }
     }
