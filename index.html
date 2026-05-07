@@ -1961,12 +1961,13 @@ function demoPrev(){if(demoStep>0){demoStep--;renderDemoStep();}}
    Key expira em 2093. Permanente.
 */
 var SB_URL = 'https://wsjfelnpxuxvpiorupsl.supabase.co/rest/v1';
-var SB_KEY = 'sb_publishable_jxZkHIlJonRDY8CKbEa4Gg_UkfURxuX';
+var SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndzamZlbG5weHV4dnBpb3J1cHNsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzgwODUxNzksImV4cCI6MjA5MzY2MTE3OX0.w27LsRWiglhPF8mNVeVV1kGgWzH2ETNbk41wlQgY39Q';
 var IS_LOADING_SHEETS = false;
 
 function sbHeaders(forWrite) {
   var h = {
     'apikey': SB_KEY,
+    'Authorization': 'Bearer ' + SB_KEY,
     'Content-Type': 'application/json'
   };
   if (forWrite) h['Prefer'] = 'return=representation';
