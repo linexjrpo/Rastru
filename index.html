@@ -1956,6 +1956,112 @@ function demoPrev(){if(demoStep>0){demoStep--;renderDemoStep();}}
    RASTRU v6 — NOTION LAYER
 ══════════════════════════════════════ */
 
+
+/* ── DEV MODE ── */
+function initDevMode(){
+  if(ge('dev-bar'))ge('dev-bar').style.display='none';
+  if(ge('dev-indicator'))ge('dev-indicator').style.display='none';
+  if(!CURRENT_USER.isOwner)return;
+  var bar=ge('dev-bar');
+  if(bar)bar.style.display='flex';
+}
+
+function setDevView(mode){
+  document.body.classList.toggle('dev-view', mode==='dev');
+  var ind=ge('dev-indicator');
+  if(ind){
+    ind.style.display = mode==='dev'?'block':'none';
+    ind.className='dev-view-indicator '+(mode==='dev'?'dev':'usr');
+    ind.textContent=mode==='dev'?'👩‍💻 DEV VIEW':'👤 USR VIEW';
+  }
+  var td=ge('dev-toggle-dev'),tu=ge('dev-toggle-usr');
+  if(td)td.className='dev-tag '+(mode==='dev'?'on':'off');
+  if(tu)tu.className='dev-tag '+(mode==='usr'?'on':'off');
+}
+
+/* ── CAMP CRUD ── */
+function deleteCamp(id){
+  if(!confirm('Excluir esta campanha? Esta ação não pode ser desfeita.'))return;
+  camps=camps.filter(function(x){return x.id!=id});
+  gsDeleteCamp(id);
+  goTo('dashboard');
+  showToast('🗑','Campanha excluída','Removida do repositório.');
+}
+
+function dupCamp(id){
+  var c=camps.find(function(x){return x.id==id});if(!c)return;
+  var nc=JSON.parse(JSON.stringify(c));
+  nc.id=Date.now();
+  nc.name='Cópia de '+c.name;
+  nc.createdAt=new Date().toISOString().slice(0,10);
+  nc.createdBy=CURRENT_USER.email;
+  nc.result=null;
+  nc.versions=[];
+  camps.unshift(nc);
+  gsSaveCamp(nc);
+  showToast('⬡','Campanha duplicada',nc.name);
+  goTo('detail',nc.id);
+}
+
+function cancelEdit(id){
+  rDet(id);
+}
+
+function saveEdits(id){
+  var c=camps.find(function(x){return x.id==id});if(!c)return;
+  var fields=['name','client','celula','objective','pain','journey','notes'];
+  fields.forEach(function(f){
+    var el=ge('edit-'+f+'-'+id);
+    if(el)saveField(id,f,el.value);
+  });
+  var lc=ge('edit-lc-'+id);
+  if(lc&&lc.value!==c.lc)saveField(id,'lc',lc.value);
+  var res=ge('edit-result-'+id);
+  if(res&&res.value&&res.value!==c.result)saveField(id,'result',res.value);
+  rDet(id);
+  showToast('✓','Alterações salvas','Campanha atualizada.');
+}
+
+function toggleNotify(id,val){
+  saveField(id,'notifyOnClose',val);
+}
+
+function importKpiFile(e){
+  var file=e.target.files[0];if(!file)return;
+  var reader=new FileReader();
+  reader.onload=function(ev){
+    try{
+      var data=ev.target.result;
+      var rows=[];
+      if(file.name.endsWith('.csv')){
+        rows=data.split('\n').slice(1).map(function(r){return r.split(',')});
+      } else if(typeof XLSX!=='undefined'){
+        var wb=XLSX.read(data,{type:'binary'});
+        var ws=wb.Sheets[wb.SheetNames[0]];
+        rows=XLSX.utils.sheet_to_json(ws,{header:1}).slice(1);
+      }
+      rows.forEach(function(row){
+        var name=String(row[0]||'').trim();
+        var meta=parseFloat(row[1]);
+        var result=row[2]?parseFloat(row[2]):null;
+        if(name&&!isNaN(meta)){
+          wd.kpis.push({name:name,meta:meta,result:isNaN(result)?null:result,id:Date.now()+Math.random()});
+        }
+      });
+      rKpis();
+      showToast('📊','KPIs importados',wd.kpis.length+' KPIs carregados');
+    }catch(err){
+      showToast('⚠️','Erro ao importar','Verifique o formato do arquivo');
+    }
+  };
+  if(file.name.endsWith('.csv'))reader.readAsText(file);
+  else reader.readAsBinaryString(file);
+}
+
+function openInCanva(){
+  showToast('🎨','Canva','Integracao em breve!');
+}
+
 /* ══════════════════════════════════════════════════════
    RASTRU — SYNC MODULE v5 (Vercel Proxy)
    All Supabase calls go via /api/supabase (no CORS)
@@ -2153,19 +2259,21 @@ function devClearLocalStorage(){
         CURRENT_USER=u;
         ge('login-screen').style.display='none';
         ge('app-shell').classList.add('on');
-        updateUserUI();
-        updateOwnerUI();
-        initDevMode();
-        gsLoad();
-        /* Load from cache immediately (localStorage-first) */
-        var _cc = loadCache();
-        if (_cc.length > 0) {
-          camps = _cc;
-          console.log('[Rastru] Session restore:', _cc.length, 'camps from cache');
-        }
-        rDash();
-        /* Sync from Supabase in background */
-        gsLoadCamps();        return;
+        /* Isolate each call — one failure won't kill the entire restore */
+        try{updateUserUI();}catch(e){}
+        try{updateOwnerUI();}catch(e){}
+        try{initDevMode();}catch(e){}
+        try{gsLoad();}catch(e){}
+        /* Load from cache immediately */
+        try{
+          var _cc=loadCache();
+          if(_cc.length>0){camps=_cc;console.log('[Rastru] F5 restore:',_cc.length,'camps');}
+        }catch(e){}
+        /* Render */
+        try{rDash();}catch(e){console.error('[Rastru] rDash:',e.message);}
+        /* Sync Supabase */
+        gsLoadCamps();
+        return;
       }
     }
   }catch(e){}
