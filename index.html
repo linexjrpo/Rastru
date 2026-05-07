@@ -1956,216 +1956,181 @@ function demoPrev(){if(demoStep>0){demoStep--;renderDemoStep();}}
    RASTRU v6 — NOTION LAYER
 ══════════════════════════════════════ */
 
-/* ── SUPABASE DB ── 
-   Banco real, sem redirect, sem CORS.
-   Key expira em 2093. Permanente.
-*/
+/* ══════════════════════════════════════════════════════
+   RASTRU — SYNC MODULE v4
+   localStorage = primary (instant, always works)
+   Supabase = sync layer (multi-user)
+   ══════════════════════════════════════════════════════ */
+
 var SB_URL = 'https://wsjfelnpxuxvpiorupsl.supabase.co/rest/v1';
 var SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndzamZlbG5weHV4dnBpb3J1cHNsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzgwODUxNzksImV4cCI6MjA5MzY2MTE3OX0.w27LsRWiglhPF8mNVeVV1kGgWzH2ETNbk41wlQgY39Q';
 var IS_LOADING_SHEETS = false;
+var CACHE_KEY = 'rastru_camps_v4';
 
-function sbHeaders(forWrite) {
-  var h = {
+/* ── Helpers ── */
+function sbH() {
+  return {
     'apikey': SB_KEY,
     'Authorization': 'Bearer ' + SB_KEY,
     'Content-Type': 'application/json'
   };
-  if (forWrite) h['Prefer'] = 'return=representation';
-  return h;
 }
 
-/* Map Rastru camp fields ↔ Supabase columns */
+function saveCache(data) {
+  try { localStorage.setItem(CACHE_KEY, JSON.stringify(data)); } catch(e) {}
+}
+
+function loadCache() {
+  try {
+    var d = localStorage.getItem(CACHE_KEY);
+    return d ? JSON.parse(d) : [];
+  } catch(e) { return []; }
+}
+
+/* ── Field mapping ── */
 function campToRow(camp) {
   return {
     id: String(camp.id),
-    name: camp.name || '',
-    client: camp.client || '',
-    celula: camp.celula || '',
-    status: camp.status || 'active',
-    lc: camp.lc || 'rascunho',
-    result: camp.result || null,
-    squad: camp.squad || [],
-    kpis: camp.kpis || [],
-    tags: camp.tags || [],
-    entries: camp.entries || [],
-    created_at: camp.createdAt || new Date().toISOString().slice(0,10),
-    created_by: camp.createdBy || '',
-    notify_on_close: camp.notifyOnClose !== false,
-    objective: camp.objective || '',
-    notes: camp.notes || '',
-    start_date: camp.start || '',
-    end_date: camp.end || '',
-    pain: camp.pain || '',
-    success_def: camp.successDef || '',
-    journey: camp.journey || '',
-    ds: camp.ds || 'manual',
-    privacy: camp.privacy || 'public',
-    works: camp.works || [],
-    didnt: camp.didnt || [],
-    opps: camp.opps || [],
-    materials: camp.materials || [],
-    links: camp.links || [],
-    versions: camp.versions || [],
+    name: camp.name||'', client: camp.client||'', celula: camp.celula||'',
+    status: camp.status||'active', lc: camp.lc||'rascunho', result: camp.result||null,
+    squad: camp.squad||[], kpis: camp.kpis||[], tags: camp.tags||[],
+    entries: camp.entries||[], created_at: camp.createdAt||'', created_by: camp.createdBy||'',
+    notify_on_close: camp.notifyOnClose!==false, objective: camp.objective||'',
+    notes: camp.notes||'', start_date: camp.start||'', end_date: camp.end||'',
+    pain: camp.pain||'', success_def: camp.successDef||'', journey: camp.journey||'',
+    ds: camp.ds||'manual', privacy: camp.privacy||'public',
+    works: camp.works||[], didnt: camp.didnt||[], opps: camp.opps||[],
+    materials: camp.materials||[], links: camp.links||[], versions: camp.versions||[],
     updated_at: new Date().toISOString()
   };
 }
 
 function rowToCamp(row) {
   return {
-    id: row.id,
-    name: row.name,
-    client: row.client,
-    celula: row.celula,
-    status: row.status,
-    lc: row.lc,
-    result: row.result,
-    squad: row.squad || [],
-    kpis: row.kpis || [],
-    tags: row.tags || [],
-    entries: row.entries || [],
-    createdAt: row.created_at,
-    createdBy: row.created_by,
-    notifyOnClose: row.notify_on_close !== false,
-    objective: row.objective,
-    notes: row.notes,
-    start: row.start_date,
-    end: row.end_date,
-    pain: row.pain,
-    successDef: row.success_def,
-    journey: row.journey,
-    ds: row.ds || 'manual',
-    privacy: row.privacy || 'public',
-    works: row.works || [],
-    didnt: row.didnt || [],
-    opps: row.opps || [],
-    materials: row.materials || [],
-    links: row.links || [],
-    versions: row.versions || []
+    id: row.id, name: row.name, client: row.client, celula: row.celula,
+    status: row.status, lc: row.lc, result: row.result,
+    squad: row.squad||[], kpis: row.kpis||[], tags: row.tags||[],
+    entries: row.entries||[], createdAt: row.created_at, createdBy: row.created_by,
+    notifyOnClose: row.notify_on_close!==false, objective: row.objective,
+    notes: row.notes, start: row.start_date, end: row.end_date,
+    pain: row.pain, successDef: row.success_def, journey: row.journey,
+    ds: row.ds||'manual', privacy: row.privacy||'public',
+    works: row.works||[], didnt: row.didnt||[], opps: row.opps||[],
+    materials: row.materials||[], links: row.links||[], versions: row.versions||[]
   };
 }
 
-/* Load all campaigns from Supabase */
+/* ── LOAD: localStorage first, then Supabase ── */
 function gsLoadCamps(cb) {
-  /* Load from Supabase — source of truth */
-  try {
-    var cached = localStorage.getItem('rastru_camps_cache');
-    if (cached) {
-      var cc = JSON.parse(cached);
-      if (cc && cc.length > 0) {
-        camps = cc;
+  /* 1. Load from localStorage immediately */
+  var cached = loadCache();
+  if (cached.length > 0) {
+    camps = cached;
+    if (typeof rDash === 'function') rDash();
+    if (typeof rRepo === 'function' && pg === 'repository') rRepo();
+    console.log('[Rastru] Loaded', cached.length, 'camps from cache');
+  }
+
+  /* 2. Sync from Supabase in background */
+  showSyncStatus('syncing');
+  fetch(SB_URL + '/campaigns?select=*&order=created_at.desc', { headers: sbH() })
+    .then(function(r) {
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      return r.json();
+    })
+    .then(function(rows) {
+      var fetched = rows.map(rowToCamp);
+      console.log('[Rastru] Supabase returned', fetched.length, 'camps');
+      /* Merge: Supabase wins if it has data, else keep local */
+      if (fetched.length > 0) {
+        camps = fetched;
+        saveCache(camps);
         if (typeof rDash === 'function') rDash();
         if (typeof rRepo === 'function' && pg === 'repository') rRepo();
+      } else if (cached.length > 0) {
+        /* Supabase empty but we have local — push local to Supabase */
+        console.log('[Rastru] Supabase empty, pushing local camps...');
+        cached.forEach(function(camp) { sbSave(camp); });
       }
-    }
-  } catch(e) {}
-
-  showSyncStatus('syncing');
-
-  fetch(SB_URL + '/campaigns?select=*&order=created_at.desc', {
-    headers: sbHeaders()
-  })
-  .then(function(r) {
-    if (!r.ok) throw new Error('HTTP ' + r.status);
-    return r.json();
-  })
-  .then(function(rows) {
-    console.log('[Rastru] Supabase raw rows:', (rows||[]).length);
-    var fetched;
-    try {
-      fetched = (rows || []).map(rowToCamp);
-    } catch(mapErr) {
-      console.error('[Rastru] rowToCamp crash:', mapErr.message);
-      fetched = [];
-    }
-    console.log('[Rastru] Supabase returned', fetched.length, 'campaigns:', fetched.map(function(x){return x.name;}));
-    /* Always update — Supabase is source of truth */
-    camps = fetched;
-    try { localStorage.setItem('rastru_camps_cache', JSON.stringify(camps)); } catch(e) {}
-    if (typeof rDash === 'function') rDash();
-    if (typeof rRepo === 'function' && pg === 'repository') rRepo();
-    showSyncStatus(camps.length > 0 ? 'ok' : 'ok');
-    if (cb) cb(camps);
-  })
-  .catch(function(err) {
-    console.error('[Rastru] gsLoadCamps FAILED:', err.message);
-    showSyncStatus('error');
-    /* On CORS/network error, restore from cache */
-    try {
-      var cached = localStorage.getItem('rastru_camps_cache');
-      if (cached) {
-        var cp = JSON.parse(cached);
-        if (cp && cp.length > 0) {
-          camps = cp;
-          console.log('[Rastru] Showing', camps.length, 'cached camps (Supabase unreachable)');
-        }
-      }
-    } catch(e) {}
-    if (typeof rDash === 'function') rDash();
-    if (typeof rRepo === 'function' && pg === 'repository') rRepo();
-  });
+      showSyncStatus('ok');
+      if (cb) cb(camps);
+    })
+    .catch(function(err) {
+      console.warn('[Rastru] Supabase load failed:', err.message, '— using cache');
+      showSyncStatus('error');
+      /* Cache already loaded above — nothing to do */
+      if (cb) cb(camps);
+    });
 }
 
-/* Save / upsert a campaign */
+/* ── SAVE: localStorage immediately, Supabase in background ── */
 function gsSaveCamp(camp) {
+  /* Save to cache immediately */
+  var idx = camps.findIndex ? camps.findIndex(function(x){return x.id==camp.id;}) :
+    (function(){for(var i=0;i<camps.length;i++)if(camps[i].id==camp.id)return i;return -1;})();
+  if (idx >= 0) camps[idx] = camp; else camps.unshift(camp);
+  saveCache(camps);
+  /* Sync to Supabase */
+  sbSave(camp);
+}
+
+function sbSave(camp) {
   var row = campToRow(camp);
   fetch(SB_URL + '/campaigns', {
     method: 'POST',
-    headers: Object.assign({}, sbHeaders(true), {'Prefer': 'resolution=merge-duplicates,return=representation'}),
+    headers: Object.assign({}, sbH(), {'Prefer': 'resolution=merge-duplicates,return=minimal'}),
     body: JSON.stringify(row)
   })
   .then(function(r) {
-    if (!r.ok) {
-      return r.text().then(function(t){ throw new Error('HTTP ' + r.status + ': ' + t); });
+    if (r.ok) {
+      showSyncStatus('ok');
+      console.log('[Rastru] Supabase saved:', camp.name, 'status:', r.status);
+    } else {
+      r.text().then(function(t){ console.error('[Rastru] Save failed:', r.status, t); });
+      showSyncStatus('error');
     }
-    return r.json();
-  })
-  .then(function(saved) {
-    console.log('[Rastru] gsSaveCamp OK:', JSON.stringify(saved).slice(0,200));
-    showSyncStatus('ok');
-    try { localStorage.setItem('rastru_camps_cache', JSON.stringify(camps)); } catch(e) {}
   })
   .catch(function(err) {
-    console.error('[Rastru] gsSaveCamp ERROR:', err.message);
+    console.warn('[Rastru] Supabase save failed:', err.message, '— saved locally only');
     showSyncStatus('error');
   });
 }
 
-/* Delete a campaign */
+/* ── DELETE ── */
 function gsDeleteCamp(id) {
+  /* Remove from cache */
+  camps = camps.filter(function(x){return String(x.id)!==String(id);});
+  saveCache(camps);
+  /* Delete from Supabase */
   fetch(SB_URL + '/campaigns?id=eq.' + encodeURIComponent(String(id)), {
-    method: 'DELETE',
-    headers: sbHeaders(false)
-  })
-  .then(function(r) { 
-    console.log('[Rastru] gsDeleteCamp status:', r.status);
-    if (!r.ok) throw new Error('HTTP ' + r.status); 
-  })
-  .catch(function(err) { console.error('[Rastru] gsDeleteCamp ERROR:', err.message); });
+    method: 'DELETE', headers: sbH()
+  }).catch(function(e){ console.warn('[Rastru] Delete sync failed:', e.message); });
 }
 
-/* Connection init — no token needed, key is permanent */
+/* ── INIT ── */
 function gsLoad() {
-  /* Supabase key is hardcoded — always connected */
+  /* Always ready — no init needed */
 }
 
 function gsSave(url) {}
 function gsClear() {}
+
 function showSyncStatus(state) {
   var el = ge('sync-status-pill');
   if (!el) return;
-  var states = {
-    ok:      { bg: 'rgba(0,108,75,.12)',   color: 'var(--gn)', dot: 'var(--gn)',  text: 'Supabase ✓' },
-    syncing: { bg: 'rgba(83,65,205,.1)',   color: 'var(--pu)', dot: 'var(--pu)', text: 'Sincronizando…' },
-    error:   { bg: 'rgba(186,26,26,.1)',   color: 'var(--rd)', dot: 'var(--rd)', text: 'Erro na sincronização' },
-    off:     { bg: 'var(--sfl)',           color: 'var(--txv)',dot: 'rgba(0,0,0,.2)', text: 'Offline' }
+  var map = {
+    ok:      { bg:'rgba(0,108,75,.12)', c:'var(--gn)', t:'Supabase ✓' },
+    syncing: { bg:'rgba(83,65,205,.1)',  c:'var(--pu)', t:'Sincronizando…' },
+    error:   { bg:'rgba(186,26,26,.1)',  c:'var(--rd)', t:'Modo offline' },
+    off:     { bg:'var(--sfl)',          c:'var(--txv)',t:'Offline' }
   };
-  var s = states[state] || states.off;
+  var s = map[state]||map.off;
   el.style.background = s.bg;
-  el.innerHTML = '<span style="width:6px;height:6px;border-radius:50%;background:' + s.dot + ';' + (state==='syncing'?'animation:lp 1s infinite':'') + '"></span><span style="font-size:11px;font-weight:600;color:' + s.color + '">' + s.text + '</span>';
+  el.innerHTML = '<span style="width:6px;height:6px;border-radius:50%;background:'+s.c+'"></span><span style="font-size:11px;font-weight:600;color:'+s.c+'">'+s.t+'</span>';
 }
 
-/* Keep these stubs for UI compatibility */
-function openGsSetup() { showToast('✅','Supabase ativo','Banco de dados sempre conectado.'); }
+/* Stubs for compatibility */
+function openGsSetup() { showToast('✅','Supabase ativo','Dados sincronizados automaticamente.'); }
 function closeGsSetup() {}
 function gsTestAndSave() {}
 function gsDisconnect() {}
@@ -2175,14 +2140,13 @@ function closeNotionSetup() {}
 function testAndSaveNotion() {}
 function updateSetupStatus() {}
 function disconnectNotion() {}
-var NOTION_CFG = { token: '', dbId: '', enabled: false };
+var NOTION_CFG = { token:'', dbId:'', enabled:false };
 function notionLoad() {}
 function notionSync() { gsLoadCamps(); }
 function notionCreate(camp) { gsSaveCamp(camp); }
 function notionUpdate(camp) { gsSaveCamp(camp); }
 function notionSave() {}
 function notionClear() {}
-
 
 /* ── UTILITY HELPERS ── */
 function escHtml(s) {
@@ -2226,24 +2190,15 @@ function devClearLocalStorage(){
         updateOwnerUI();
         initDevMode();
         gsLoad();
-        /* Load from cache first for instant display */
-        try {
-          var _cc=localStorage.getItem('rastru_camps_cache');
-          if(_cc){
-            var _cp=JSON.parse(_cc);
-            camps=_cp;
-            console.log('[Rastru] Session restore: cache has',_cp.length,'camps');
-          } else {
-            console.log('[Rastru] Session restore: no cache');
-          }
-        } catch(e){
-          console.error('[Rastru] Session restore cache error:',e.message);
+        /* Load from cache immediately (localStorage-first) */
+        var _cc = loadCache();
+        if (_cc.length > 0) {
+          camps = _cc;
+          console.log('[Rastru] Session restore:', _cc.length, 'camps from cache');
         }
         rDash();
-        /* Fetch fresh from Supabase */
-        console.log('[Rastru] Starting Supabase fetch...');
-        gsLoadCamps();
-        return;
+        /* Sync from Supabase in background */
+        gsLoadCamps();        return;
       }
     }
   }catch(e){}
