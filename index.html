@@ -1967,7 +1967,6 @@ var IS_LOADING_SHEETS = false;
 function sbHeaders(forWrite) {
   var h = {
     'apikey': SB_KEY,
-    'Authorization': 'Bearer ' + SB_KEY,
     'Content-Type': 'application/json'
   };
   if (forWrite) h['Prefer'] = 'return=representation';
