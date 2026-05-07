@@ -1957,46 +1957,33 @@ function demoPrev(){if(demoStep>0){demoStep--;renderDemoStep();}}
 ══════════════════════════════════════ */
 
 /* ══════════════════════════════════════════════════════
-   RASTRU — SYNC MODULE v4
-   localStorage = primary (instant, always works)
-   Supabase = sync layer (multi-user)
+   RASTRU — SYNC MODULE v5 (Vercel Proxy)
+   All Supabase calls go via /api/supabase (no CORS)
+   localStorage = primary (instant)
+   Supabase = sync (background)
    ══════════════════════════════════════════════════════ */
 
-var SB_URL = 'https://wsjfelnpxuxvpiorupsl.supabase.co/rest/v1';
-var SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndzamZlbG5weHV4dnBpb3J1cHNsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzgwODUxNzksImV4cCI6MjA5MzY2MTE3OX0.w27LsRWiglhPF8mNVeVV1kGgWzH2ETNbk41wlQgY39Q';
 var IS_LOADING_SHEETS = false;
 var CACHE_KEY = 'rastru_camps_v4';
-
-/* ── Helpers ── */
-function sbH() {
-  return {
-    'apikey': SB_KEY,
-    'Authorization': 'Bearer ' + SB_KEY,
-    'Content-Type': 'application/json'
-  };
-}
 
 function saveCache(data) {
   try { localStorage.setItem(CACHE_KEY, JSON.stringify(data)); } catch(e) {}
 }
 
 function loadCache() {
-  try {
-    var d = localStorage.getItem(CACHE_KEY);
-    return d ? JSON.parse(d) : [];
-  } catch(e) { return []; }
+  try { var d=localStorage.getItem(CACHE_KEY); return d?JSON.parse(d):[]; } catch(e) { return []; }
 }
 
-/* ── Field mapping ── */
+/* Field mapping: Rastru ↔ Supabase */
 function campToRow(camp) {
   return {
-    id: String(camp.id),
-    name: camp.name||'', client: camp.client||'', celula: camp.celula||'',
+    id: String(camp.id), name: camp.name||'', client: camp.client||'', celula: camp.celula||'',
     status: camp.status||'active', lc: camp.lc||'rascunho', result: camp.result||null,
-    squad: camp.squad||[], kpis: camp.kpis||[], tags: camp.tags||[],
-    entries: camp.entries||[], created_at: camp.createdAt||'', created_by: camp.createdBy||'',
-    notify_on_close: camp.notifyOnClose!==false, objective: camp.objective||'',
-    notes: camp.notes||'', start_date: camp.start||'', end_date: camp.end||'',
+    squad: camp.squad||[], kpis: camp.kpis||[], tags: camp.tags||[], entries: camp.entries||[],
+    created_at: camp.createdAt||'', created_by: camp.createdBy||'',
+    notify_on_close: camp.notifyOnClose!==false,
+    objective: camp.objective||'', notes: camp.notes||'',
+    start_date: camp.start||'', end_date: camp.end||'',
     pain: camp.pain||'', success_def: camp.successDef||'', journey: camp.journey||'',
     ds: camp.ds||'manual', privacy: camp.privacy||'public',
     works: camp.works||[], didnt: camp.didnt||[], opps: camp.opps||[],
@@ -2009,10 +1996,11 @@ function rowToCamp(row) {
   return {
     id: row.id, name: row.name, client: row.client, celula: row.celula,
     status: row.status, lc: row.lc, result: row.result,
-    squad: row.squad||[], kpis: row.kpis||[], tags: row.tags||[],
-    entries: row.entries||[], createdAt: row.created_at, createdBy: row.created_by,
-    notifyOnClose: row.notify_on_close!==false, objective: row.objective,
-    notes: row.notes, start: row.start_date, end: row.end_date,
+    squad: row.squad||[], kpis: row.kpis||[], tags: row.tags||[], entries: row.entries||[],
+    createdAt: row.created_at, createdBy: row.created_by,
+    notifyOnClose: row.notify_on_close!==false,
+    objective: row.objective, notes: row.notes,
+    start: row.start_date, end: row.end_date,
     pain: row.pain, successDef: row.success_def, journey: row.journey,
     ds: row.ds||'manual', privacy: row.privacy||'public',
     works: row.works||[], didnt: row.didnt||[], opps: row.opps||[],
@@ -2020,98 +2008,77 @@ function rowToCamp(row) {
   };
 }
 
-/* ── LOAD: localStorage first, then Supabase ── */
+/* LOAD: cache first → proxy in background */
 function gsLoadCamps(cb) {
-  /* 1. Load from localStorage immediately */
   var cached = loadCache();
   if (cached.length > 0) {
     camps = cached;
-    if (typeof rDash === 'function') rDash();
-    if (typeof rRepo === 'function' && pg === 'repository') rRepo();
-    console.log('[Rastru] Loaded', cached.length, 'camps from cache');
+    if (typeof rDash==='function') rDash();
+    if (typeof rRepo==='function' && pg==='repository') rRepo();
+    console.log('[Rastru] Cache: loaded', cached.length, 'camps');
   }
 
-  /* 2. Sync from Supabase in background */
   showSyncStatus('syncing');
-  fetch(SB_URL + '/campaigns?select=*&order=created_at.desc', { headers: sbH() })
-    .then(function(r) {
-      if (!r.ok) throw new Error('HTTP ' + r.status);
-      return r.json();
-    })
-    .then(function(rows) {
-      var fetched = rows.map(rowToCamp);
-      console.log('[Rastru] Supabase returned', fetched.length, 'camps');
-      /* Merge: Supabase wins if it has data, else keep local */
+  fetch('/api/supabase?action=load')
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      if (!data.ok) throw new Error(data.error||'load failed');
+      var fetched = (data.camps||[]).map(rowToCamp);
+      console.log('[Rastru] Supabase: loaded', fetched.length, 'camps');
       if (fetched.length > 0) {
         camps = fetched;
         saveCache(camps);
-        if (typeof rDash === 'function') rDash();
-        if (typeof rRepo === 'function' && pg === 'repository') rRepo();
+        if (typeof rDash==='function') rDash();
+        if (typeof rRepo==='function' && pg==='repository') rRepo();
       } else if (cached.length > 0) {
-        /* Supabase empty but we have local — push local to Supabase */
-        console.log('[Rastru] Supabase empty, pushing local camps...');
+        console.log('[Rastru] Supabase empty — pushing', cached.length, 'local camps');
         cached.forEach(function(camp) { sbSave(camp); });
       }
       showSyncStatus('ok');
       if (cb) cb(camps);
     })
     .catch(function(err) {
-      console.warn('[Rastru] Supabase load failed:', err.message, '— using cache');
+      console.warn('[Rastru] Supabase load failed:', err.message);
       showSyncStatus('error');
-      /* Cache already loaded above — nothing to do */
       if (cb) cb(camps);
     });
 }
 
-/* ── SAVE: localStorage immediately, Supabase in background ── */
+/* SAVE: cache immediately → proxy in background */
 function gsSaveCamp(camp) {
-  /* Save to cache immediately */
-  var idx = camps.findIndex ? camps.findIndex(function(x){return x.id==camp.id;}) :
-    (function(){for(var i=0;i<camps.length;i++)if(camps[i].id==camp.id)return i;return -1;})();
-  if (idx >= 0) camps[idx] = camp; else camps.unshift(camp);
+  var found = false;
+  for (var i=0; i<camps.length; i++) {
+    if (String(camps[i].id)===String(camp.id)) { camps[i]=camp; found=true; break; }
+  }
+  if (!found) camps.unshift(camp);
   saveCache(camps);
-  /* Sync to Supabase */
   sbSave(camp);
 }
 
 function sbSave(camp) {
-  var row = campToRow(camp);
-  fetch(SB_URL + '/campaigns', {
+  fetch('/api/supabase?action=save', {
     method: 'POST',
-    headers: Object.assign({}, sbH(), {'Prefer': 'resolution=merge-duplicates,return=minimal'}),
-    body: JSON.stringify(row)
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(campToRow(camp))
   })
-  .then(function(r) {
-    if (r.ok) {
-      showSyncStatus('ok');
-      console.log('[Rastru] Supabase saved:', camp.name, 'status:', r.status);
-    } else {
-      r.text().then(function(t){ console.error('[Rastru] Save failed:', r.status, t); });
-      showSyncStatus('error');
-    }
+  .then(function(r) { return r.json(); })
+  .then(function(d) {
+    if (d.ok) { showSyncStatus('ok'); console.log('[Rastru] Saved:', camp.name); }
+    else { console.error('[Rastru] Save failed:', d.error); showSyncStatus('error'); }
   })
-  .catch(function(err) {
-    console.warn('[Rastru] Supabase save failed:', err.message, '— saved locally only');
-    showSyncStatus('error');
-  });
+  .catch(function(e) { console.warn('[Rastru] Save error:', e.message); });
 }
 
-/* ── DELETE ── */
+/* DELETE */
 function gsDeleteCamp(id) {
-  /* Remove from cache */
-  camps = camps.filter(function(x){return String(x.id)!==String(id);});
+  camps = camps.filter(function(x){ return String(x.id)!==String(id); });
   saveCache(camps);
-  /* Delete from Supabase */
-  fetch(SB_URL + '/campaigns?id=eq.' + encodeURIComponent(String(id)), {
-    method: 'DELETE', headers: sbH()
-  }).catch(function(e){ console.warn('[Rastru] Delete sync failed:', e.message); });
+  fetch('/api/supabase?action=delete&id='+encodeURIComponent(String(id)))
+    .catch(function(e){ console.warn('[Rastru] Delete error:', e.message); });
 }
 
-/* ── INIT ── */
-function gsLoad() {
-  /* Always ready — no init needed */
-}
-
+/* Init */
+function gsLoad() { /* Always ready */ }
 function gsSave(url) {}
 function gsClear() {}
 
@@ -2119,18 +2086,18 @@ function showSyncStatus(state) {
   var el = ge('sync-status-pill');
   if (!el) return;
   var map = {
-    ok:      { bg:'rgba(0,108,75,.12)', c:'var(--gn)', t:'Supabase ✓' },
-    syncing: { bg:'rgba(83,65,205,.1)',  c:'var(--pu)', t:'Sincronizando…' },
-    error:   { bg:'rgba(186,26,26,.1)',  c:'var(--rd)', t:'Modo offline' },
-    off:     { bg:'var(--sfl)',          c:'var(--txv)',t:'Offline' }
+    ok:      {bg:'rgba(0,108,75,.12)', c:'var(--gn)', t:'Sincronizado ✓'},
+    syncing: {bg:'rgba(83,65,205,.1)', c:'var(--pu)', t:'Sincronizando…'},
+    error:   {bg:'rgba(186,26,26,.1)', c:'var(--rd)', t:'Modo offline'},
+    off:     {bg:'var(--sfl)',         c:'var(--txv)',t:'Offline'}
   };
   var s = map[state]||map.off;
   el.style.background = s.bg;
   el.innerHTML = '<span style="width:6px;height:6px;border-radius:50%;background:'+s.c+'"></span><span style="font-size:11px;font-weight:600;color:'+s.c+'">'+s.t+'</span>';
 }
 
-/* Stubs for compatibility */
-function openGsSetup() { showToast('✅','Supabase ativo','Dados sincronizados automaticamente.'); }
+/* Stubs */
+function openGsSetup() { showToast('✅','Banco conectado','Dados sincronizados via Supabase.'); }
 function closeGsSetup() {}
 function gsTestAndSave() {}
 function gsDisconnect() {}
@@ -2140,7 +2107,7 @@ function closeNotionSetup() {}
 function testAndSaveNotion() {}
 function updateSetupStatus() {}
 function disconnectNotion() {}
-var NOTION_CFG = { token:'', dbId:'', enabled:false };
+var NOTION_CFG = {token:'',dbId:'',enabled:false};
 function notionLoad() {}
 function notionSync() { gsLoadCamps(); }
 function notionCreate(camp) { gsSaveCamp(camp); }
