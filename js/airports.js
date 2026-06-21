@@ -62,7 +62,7 @@ const eAPS = [
   {code:'USH',name:'Ushuaia-Malvinas Argentinas',city:'Ushuaia',country:'Argentina',flag:'🇦🇷',x:33,y:92,type:'sec',alt:['ush','tierra del fuego','fim do mundo'],lat:-54.84,lng:-68.29},
   // ── Europa ──────────────────────────────────────
   {code:'LIS',name:'Lisboa-Humberto Delgado',city:'Lisboa',country:'Portugal',flag:'🇵🇹',x:45,y:34,type:'main',alt:['lis','portugal','lisbon'],lat:38.78,lng:-9.13},
-  {code:'OPO',name:'Porto-Francisco Sá Carneiro',city:'Porto',country:'Portugal',flag:'🇵🇹',x:45,y:32,type:'main',alt:['opo','porto portugal'],lat:41.24,lng:-8.68},
+  {code:'OPO',name:'Porto-Francisco Sá Carneiro',city:'Porto',country:'Portugal',flag:'🇵🇹',x:45,y:32,type:'main',alt:['opo','porto','porto portugal','duoro','douro','portugal norte'],lat:41.24,lng:-8.68},
   {code:'FAO',name:'Faro-Internacional',city:'Faro',country:'Portugal',flag:'🇵🇹',x:45,y:35,type:'main',alt:['fao','algarve','portugal sul']},
   {code:'MAD',name:'Madrid-Adolfo Suárez Barajas',city:'Madrid',country:'Espanha',flag:'🇪🇸',x:48,y:34,type:'main',alt:['mad','espanha','spain'],lat:40.47,lng:-3.56},
   {code:'BCN',name:'Barcelona-El Prat',city:'Barcelona',country:'Espanha',flag:'🇪🇸',x:50,y:33,type:'main',alt:['bcn','barcelona','catalunha'],lat:41.3,lng:2.08},
@@ -197,7 +197,6 @@ const eAPS = [
   {code:'PPT',name:'Papeete-Faa\'a',city:'Papeete',country:'Polinésia Francesa',flag:'🇵🇫',x:94,y:63,type:'main',alt:['ppt','papeete','tahiti','bora bora','polinesia'],lat:-17.56,lng:-149.61},
   {code:'APW',name:'Apia-Faleolo',city:'Apia',country:'Samoa',flag:'🇼🇸',x:95,y:65,type:'main',alt:['apw','apia','samoa'],lat:-13.83,lng:-172.0},
   // ── Cidades menores / destinos turísticos ─────────
-  {code:'OPO',name:'Porto-Francisco Sá Carneiro',city:'Porto',country:'Portugal',flag:'🇵🇹',x:45,y:32,type:'main',alt:['opo','porto','duoro','douro','portugal norte'],lat:41.24,lng:-8.68},
   {code:'VLC',name:'Valência-Internacional',city:'Valência',country:'Espanha',flag:'🇪🇸',x:49,y:34,type:'main',alt:['vlc','valencia','comunitat valenciana']},
   {code:'SVQ',name:'Sevilha-San Pablo',city:'Sevilha',country:'Espanha',flag:'🇪🇸',x:47,y:35,type:'main',alt:['svq','sevilha','seville','andaluzia','flamenco'],lat:37.42,lng:-5.89},
   {code:'BIO',name:'Bilbao-Internacional',city:'Bilbao',country:'Espanha',flag:'🇪🇸',x:48,y:32,type:'main',alt:['bio','bilbao','pais basco','guggenheim'],lat:43.3,lng:-2.91},
