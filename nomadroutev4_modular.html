@@ -1,0 +1,954 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta http-equiv="Referrer-Policy" content="strict-origin-when-cross-origin">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#0f4c81">
+<meta name="description" content="Planejador inteligente de viagens com IA real, otimização de rotas TSP e comparação de transportes.">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="NomadRoute">
+<link rel="manifest" href="data:application/json,{&quot;name&quot;:&quot;NomadRoute&quot;,&quot;short_name&quot;:&quot;NomadRoute&quot;,&quot;description&quot;:&quot;Planejador de viagens com IA&quot;,&quot;start_url&quot;:&quot;/&quot;,&quot;display&quot;:&quot;standalone&quot;,&quot;background_color&quot;:&quot;%232c4a1e&quot;,&quot;theme_color&quot;:&quot;%232c4a1e&quot;,&quot;icons&quot;:[{&quot;src&quot;:&quot;data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='%232c4a1e'/%3E%3Ctext y='.9em' font-size='80'%3E🧭%3C/text%3E%3C/svg%3E&quot;,&quot;sizes&quot;:&quot;any&quot;,&quot;type&quot;:&quot;image/svg+xml&quot;}]}">
+<title>NomadRoute — Descubra o Mundo do Seu Jeito</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Sora:wght@400;600;700&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
+<noscript><link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Sora:wght@400;600;700&display=swap" rel="stylesheet"></noscript>
+<link rel="stylesheet" href="css/main.css">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" defer></script>
+</head>
+</head>
+
+  <!-- Progress bar de carregamento -->
+  <div id="pageProgress" style="position:fixed;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,var(--sky),var(--coral),var(--teal));z-index:9999;transform:scaleX(0);transform-origin:left;transition:transform .3s ease;"></div>
+
+<body>
+
+<!-- ═══════════ NAV ═══════════ -->
+<nav class="nav" id="mainNav">
+  <div class="nav-logo" onclick="window.scrollTo({top:0,behavior:'smooth'})">
+    <div class="nav-logo-mark">🧭</div>
+    Nomad<em>Route</em>
+  </div>
+  <ul class="nav-links">
+    <li onclick="document.getElementById('destSection').scrollIntoView({behavior:'smooth'})">Destinos</li>
+    <li onclick="document.getElementById('howItWorks').scrollIntoView({behavior:'smooth'})">Como Funciona</li>
+    <li onclick="document.getElementById('testiSection').scrollIntoView({behavior:'smooth'})">Depoimentos</li>
+    <li>Premium</li>
+  </ul>
+  <div class="nav-right">
+    <!-- Currency dropdown -->
+    <div class="nav-currency" id="navCurrency" onclick="eToggleCurrencyMenu(event)">
+      <span id="navCurrencyFlag">🇧🇷</span>
+      <span id="navCurrencyCode">BRL</span>
+      <span class="nav-currency-arrow" id="navCurrencyArrow">▾</span>
+      <div class="nav-currency-menu" id="navCurrencyMenu">
+        <div class="ncm-item" onclick="eSetCurrencyGlobal('BRL','R$','🇧🇷',event)"><span>🇧🇷</span><span>BRL</span><span>Real</span></div>
+        <div class="ncm-item" onclick="eSetCurrencyGlobal('USD','$','🇺🇸',event)"><span>🇺🇸</span><span>USD</span><span>Dólar</span></div>
+        <div class="ncm-item" onclick="eSetCurrencyGlobal('EUR','€','🇪🇺',event)"><span>🇪🇺</span><span>EUR</span><span>Euro</span></div>
+        <div class="ncm-item" onclick="eSetCurrencyGlobal('GBP','£','🇬🇧',event)"><span>🇬🇧</span><span>GBP</span><span>Libra</span></div>
+        <div class="ncm-item" onclick="eSetCurrencyGlobal('ARS','$','🇦🇷',event)"><span>🇦🇷</span><span>ARS</span><span>Peso Arg.</span></div>
+        <div class="ncm-item" onclick="eSetCurrencyGlobal('CLP','$','🇨🇱',event)"><span>🇨🇱</span><span>CLP</span><span>Peso Chi.</span></div>
+        <div class="ncm-item" onclick="eSetCurrencyGlobal('JPY','¥','🇯🇵',event)"><span>🇯🇵</span><span>JPY</span><span>Iene</span></div>
+      </div>
+    </div>
+    <button class="nbtn nbtn-ghost">Entrar</button>
+    <button class="nbtn nbtn-cta" onclick="openApp()">🗺️ Planejar</button>
+    <button class="nav-hamburger" id="navHamburger" onclick="openMobileMenu()" aria-label="Menu">
+      <span></span><span></span><span></span>
+    </button>
+  </div>
+</nav>
+
+<!-- MOBILE MENU -->
+<div class="mobile-menu" id="mobileMenu">
+  <button class="mobile-menu-close" onclick="closeMobileMenu()">✕</button>
+  <div class="mobile-menu-link" onclick="closeMobileMenu();document.getElementById('destSection').scrollIntoView({behavior:'smooth'})">Destinos</div>
+  <div class="mobile-menu-link" onclick="closeMobileMenu();document.getElementById('howItWorks').scrollIntoView({behavior:'smooth'})">Como Funciona</div>
+  <div class="mobile-menu-link" onclick="closeMobileMenu();document.getElementById('testiSection').scrollIntoView({behavior:'smooth'})">Depoimentos</div>
+  <div class="mobile-menu-link" onclick="closeMobileMenu()">Premium</div>
+  <button class="nbtn nbtn-cta" style="font-size:1rem;padding:13px 32px" onclick="closeMobileMenu();openApp()">🗺️ Planejar</button>
+</div>
+
+<!-- ═══════════ HERO ═══════════ -->
+<section class="hero" id="hero">
+  <!-- canvas removido: animação substituída por gradiente CSS --></canvas>
+  <div class="hero-noise"></div>
+  <div class="hero-slides" id="heroSlides">
+    <div class="hero-slide on" style="background-image:url('https://images.unsplash.com/photo-1476514525535-07fb3b4ae5f1?w=1920&q=85')"></div>
+    <div class="hero-slide" style="background-image:url('https://images.unsplash.com/photo-1499856871958-5b9627545d1a?w=1920&q=85')"></div>
+    <div class="hero-slide" style="background-image:url('https://images.unsplash.com/photo-1528360983277-13d401cdc186?w=1920&q=85')"></div>
+    <div class="hero-slide" style="background-image:url('https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=1920&q=85')"></div>
+    <div class="hero-slide" style="background-image:url('https://images.unsplash.com/photo-1533105079780-92b9be482077?w=1920&q=85')"></div>
+  </div>
+
+  <div class="slide-city" id="slideCity">
+    <div class="slide-city-name" id="slideName">Patagônia</div>
+    <div class="slide-city-country" id="slideCountry">Argentina · América do Sul</div>
+  </div>
+  <div class="slide-dots" id="slideDots"></div>
+  <div class="slide-progress"><div class="slide-progress-bar" id="progressBar"></div></div>
+
+  <div class="hero-content">
+    <div class="hero-eyebrow">
+      <div class="hero-eyebrow-dot"></div>
+      Para quem quer sair da mesmice
+    </div>
+    <h1 class="hero-title">
+      Sua próxima<br><em>aventura</em><br>começa aqui.
+    </h1>
+    <p class="hero-sub">
+      Mochilão, travessia, expedição — do ponto A ao ponto Z. 
+      O planejador inteligente que organiza sua rota, compara transportes e salva cada centavo.
+    </p>
+    <div class="hero-actions">
+      <button class="hero-btn-primary" onclick="openApp()">
+        <span>Montar meu roteiro</span>
+        <div class="hero-btn-icon">→</div>
+      </button>
+      <button class="hero-btn-secondary" onclick="document.getElementById('howItWorks').scrollIntoView({behavior:'smooth'})">
+        ▶  Ver como funciona
+      </button>
+    </div>
+  </div>
+</section>
+
+<!-- SEARCH HUB — homepage simplificada: só origem + destinos -->
+<div class="search-bar-wrap" id="searchHub">
+  <div class="shub-inner">
+    <div class="shub-row shub-row-main">
+
+      <!-- Origem -->
+      <div class="shub-field shub-origin" id="shubOriginField">
+        <div class="shub-label">🟢 De onde você sai?</div>
+        <input class="shub-input" id="shubOriginInput" placeholder="Cidade ou aeroporto…"
+          autocomplete="off" oninput="eShubAC('origin',this.value)" onfocus="eShubFocus('origin')"
+          onblur="setTimeout(()=>eShubBlur('origin'),200)">
+        <div class="shub-ac" id="shubOriginAC"></div>
+        <div class="shub-tag" id="shubOriginTag"></div>
+      </div>
+
+      <button class="shub-swap" onclick="eShubSwap()" title="Trocar origem/destino">⇄</button>
+
+      <!-- Destino principal -->
+      <div class="shub-field shub-dest" id="shubDestField">
+        <div class="shub-label">📍 Para onde?</div>
+        <input class="shub-input" id="shubDestInput" placeholder="Destino principal…"
+          autocomplete="off" oninput="eShubAC('dest',this.value)" onfocus="eShubFocus('dest')"
+          onblur="setTimeout(()=>eShubBlur('dest'),200)">
+        <div class="shub-ac" id="shubDestAC"></div>
+        <div class="shub-tag" id="shubDestTag"></div>
+      </div>
+
+      <!-- Destinos extras -->
+      <div id="shubExtraDestsWrap" style="display:none;flex:2;display:none"><!-- preenchido dinamicamente --></div>
+
+      <!-- Add destino + Planejar -->
+      <div style="display:flex;flex-direction:column;gap:6px;flex-shrink:0">
+        <button class="shub-add-dest" id="shubAddDestBtn" onclick="eShubAddDest()" title="Adicionar parada">
+          ＋ Parada
+        </button>
+        <button class="shub-plan-btn" id="shubPlanBtn" onclick="eShubPlan()">
+          🗺️ Planejar rota
+        </button>
+      </div>
+
+    </div>
+
+    <!-- Destinos extras (row separada, aparece ao adicionar) -->
+    <div id="shubExtraRow" style="display:none;flex-direction:column;gap:6px;margin-top:4px"></div>
+  </div>
+</div></div>
+
+<!-- BADGES — fora do hero, logo abaixo da search bar -->
+<div class="hero-badges">
+  <div class="hbadge">
+    <div class="hbadge-icon g" id="hbIcon1">🌿</div>
+    <div><div class="hbadge-num">150+</div><div class="hbadge-lbl">Aeroportos mapeados</div></div>
+  </div>
+  <div class="hbadge">
+    <div class="hbadge-icon e">🧠</div>
+    <div><div class="hbadge-num" id="counterAI">0</div><div class="hbadge-lbl">Roteiros gerados</div></div>
+  </div>
+  <div class="hbadge">
+    <div class="hbadge-icon s">🌍</div>
+    <div><div class="hbadge-num">50+</div><div class="hbadge-lbl">Países suportados</div></div>
+  </div>
+  <div class="hbadge">
+    <div class="hbadge-icon y">💰</div>
+    <div><div class="hbadge-num">€180</div><div class="hbadge-lbl">Economia média</div></div>
+  </div>
+</div>
+
+<!-- ═══════════ FEATURES ═══════════ -->
+<div class="features-strip">
+  <div class="feat">
+    <div class="feat-icon g">🧭</div>
+    <div>
+      <div class="feat-title">Até 15 destinos</div>
+      <div class="feat-desc">Monte roteiros complexos com múltiplos países e cidades em uma única viagem.</div>
+    </div>
+  </div>
+  <div class="feat">
+    <div class="feat-icon e">🧠</div>
+    <div>
+      <div class="feat-title">IA real (Claude)</div>
+      <div class="feat-desc">Geração de roteiro com inteligência artificial real — não sugestões genéricas.</div>
+    </div>
+  </div>
+  <div class="feat">
+    <div class="feat-icon s">🌡️</div>
+    <div>
+      <div class="feat-title">Alertas climáticos</div>
+      <div class="feat-desc">Análise de clima, eventos locais e sazonalidade para cada trecho da viagem.</div>
+    </div>
+  </div>
+  <div class="feat">
+    <div class="feat-icon y">✈️</div>
+    <div>
+      <div class="feat-title">Compare transportes</div>
+      <div class="feat-desc">Avião, trem, ônibus ou ferry — custo, tempo e CO₂ para cada trecho.</div>
+    </div>
+  </div>
+  <div class="feat">
+    <div class="feat-icon m">🗺️</div>
+    <div>
+      <div class="feat-title">Mapa animado</div>
+      <div class="feat-desc">Veja sua rota ganhar vida antes de comprar qualquer passagem.</div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════ DESTINATIONS ═══════════ -->
+<section class="section" id="destSection">
+  <div class="dest-section-head">
+    <div>
+      <div class="section-tag">🌍 Inspire-se</div>
+      <h2 class="section-title" style="margin-bottom:0">O mundo está esperando.<br><em>Por onde começar?</em></h2>
+    </div>
+    <div class="dest-filters" id="destFilters">
+      <button class="dest-filter on" data-filter="all" onclick="eFilterDest('all',this)">Todos</button>
+      <button class="dest-filter" data-filter="europa" onclick="eFilterDest('europa',this)">🇪🇺 Europa</button>
+      <button class="dest-filter" data-filter="asia" onclick="eFilterDest('asia',this)">🌏 Ásia</button>
+      <button class="dest-filter" data-filter="americas" onclick="eFilterDest('americas',this)">🌎 Américas</button>
+      <button class="dest-filter" data-filter="africa" onclick="eFilterDest('africa',this)">🌍 África</button>
+    </div>
+  </div>
+  <div class="dest-grid" id="destGrid">
+    <div class="dest-card" onclick="openAppWith('Patagônia')" data-continent="americas">
+      <img src="https://images.unsplash.com/photo-1501854140801-50d01698950b?w=900&q=80" loading="lazy" alt="Patagônia">
+      <div class="dest-info">
+        <div class="dest-name">Patagônia</div>
+        <div class="dest-tag">🇦🇷🇨🇱 América do Sul · Trekking</div>
+      </div>
+      <button class="dest-explore">Explorar →</button>
+    </div>
+    <div class="dest-card" onclick="openAppWith('Nepal')" data-continent="asia">
+      <img src="https://images.unsplash.com/photo-1605540436563-5bca919ae766?w=700&q=80" loading="lazy" alt="Nepal">
+      <div class="dest-info">
+        <div class="dest-name">Nepal</div>
+        <div class="dest-tag">🇳🇵 Ásia · Himalaia</div>
+      </div>
+      <button class="dest-explore">Explorar →</button>
+    </div>
+    <div class="dest-card" onclick="openAppWith('Marrocos')" data-continent="africa">
+      <img src="https://images.unsplash.com/photo-1539020140153-e479b8c22e70?w=700&q=80" loading="lazy" alt="Marrocos">
+      <div class="dest-info">
+        <div class="dest-name">Marrocos</div>
+        <div class="dest-tag">🇲🇦 África · Deserto</div>
+      </div>
+      <button class="dest-explore">Explorar →</button>
+    </div>
+    <div class="dest-card" onclick="openAppWith('Colômbia')" data-continent="americas">
+      <img src="https://images.unsplash.com/photo-1596895111956-bf1cf0599ce5?w=700&q=80" loading="lazy" alt="Colômbia">
+      <div class="dest-info">
+        <div class="dest-name">Colômbia</div>
+        <div class="dest-tag">🇨🇴 América do Sul</div>
+      </div>
+      <button class="dest-explore">Explorar →</button>
+    </div>
+    <div class="dest-card" onclick="openAppWith('Islândia')" data-continent="europa">
+      <img src="https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?w=700&q=80" loading="lazy" alt="Islândia">
+      <div class="dest-info">
+        <div class="dest-name">Islândia</div>
+        <div class="dest-tag">🇮🇸 Europa · Aurora Boreal</div>
+      </div>
+      <button class="dest-explore">Explorar →</button>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════ HOW IT WORKS ═══════════ -->
+<div class="hiw-bg" id="howItWorks">
+  <div class="hiw-section-tag">Como Funciona</div>
+  <h2 class="hiw-title">Da ideia ao roteiro em<br><em>menos de 5 minutos.</em></h2>
+  <div class="hiw-steps">
+    <div class="hiw-step">
+      <div class="hiw-step-num g">1</div>
+      <div class="hiw-step-title">Escolha os destinos</div>
+      <div class="hiw-step-desc">Digite cidades, países ou regiões. O sistema sugere automaticamente os melhores aeroportos e conexões.</div>
+    </div>
+    <div class="hiw-step">
+      <div class="hiw-step-num e">2</div>
+      <div class="hiw-step-title">IA organiza a rota</div>
+      <div class="hiw-step-desc">Algoritmo TSP + Claude IA testa combinações e encontra a ordem de visita mais eficiente e barata.</div>
+    </div>
+    <div class="hiw-step">
+      <div class="hiw-step-num s">3</div>
+      <div class="hiw-step-title">Compare transportes</div>
+      <div class="hiw-step-desc">Avião, trem, ônibus ou ferry — compare preço, tempo e emissão de CO₂ para cada trecho.</div>
+    </div>
+    <div class="hiw-step">
+      <div class="hiw-step-num y">4</div>
+      <div class="hiw-step-title">Exporte e viaje</div>
+      <div class="hiw-step-desc">Roteiro em PDF, planilha de custos e mapa interativo prontos para compartilhar ou imprimir.</div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════ TESTIMONIALS ═══════════ -->
+<section class="testimonials" id="testiSection">
+  <div class="section-tag">💬 Depoimentos reais</div>
+  <h2 class="section-title" style="margin-bottom:44px">Mochileiros que já partiram<br><em>com a gente.</em></h2>
+  <div class="testi-grid">
+    <div class="testi-card">
+      <div class="testi-stars">★★★★★</div>
+      <p class="testi-text">"Fiz um mochilão por 8 países da América do Sul. O algoritmo reorganizou minha rota e economizei quase R$800 em passagens sem abrir mão de nenhum destino."</p>
+      <div class="testi-author">
+        <div class="testi-avatar"><img src="https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=100&q=80" loading="lazy" alt=""></div>
+        <div><div class="testi-name">Ana Beatriz S.</div><div class="testi-trip">SP → Lima → La Paz → BsAs · 28 dias</div></div>
+      </div>
+    </div>
+    <div class="testi-card">
+      <div class="testi-stars">★★★★★</div>
+      <p class="testi-text">"A IA do Claude que eles integraram é incrível. Descrevi minha viagem em uma frase e ela gerou um roteiro completo com dicas de hospedagem barata em cada cidade."</p>
+      <div class="testi-author">
+        <div class="testi-avatar"><img src="https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100&q=80" loading="lazy" alt=""></div>
+        <div><div class="testi-name">Rodrigo M.</div><div class="testi-trip">Sudeste Asiático · 45 dias · Solo</div></div>
+      </div>
+    </div>
+    <div class="testi-card">
+      <div class="testi-stars">★★★★★</div>
+      <p class="testi-text">"O alerta climático me salvou — ia fazer trekking na Islândia na época errada. A análise identificou isso e sugeriu um período melhor com €200 de diferença na passagem."</p>
+      <div class="testi-author">
+        <div class="testi-avatar"><img src="https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=100&q=80" loading="lazy" alt=""></div>
+        <div><div class="testi-name">Fernanda L.</div><div class="testi-trip">Islândia + Escandinávia · 18 dias</div></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════ APP SECTION ═══════════ -->
+<section class="app-section" id="appPreview">
+  <div class="app-section-inner">
+    <div class="app-section-text">
+      <div class="section-tag">O Planejador</div>
+      <h2 class="section-title" style="font-size:2.1rem;margin-bottom:18px">Veja em ação.<br><em>Explore agora.</em></h2>
+      <p class="app-section-intro">O NomadRoute roda direto no navegador com IA real. Nenhum cadastro necessário para começar.</p>
+      <div class="app-perks">
+        <div class="perk"><div class="perk-dot g" style="background:var(--sky)"></div><div class="perk-text"><strong>Autocomplete de aeroportos</strong> — 80+ com código IATA, tipo e localização</div></div>
+        <div class="perk"><div class="perk-dot e" style="background:var(--coral)"></div><div class="perk-text"><strong>Drag & drop</strong> — reorganize destinos e o roteiro atualiza na hora</div></div>
+        <div class="perk"><div class="perk-dot s" style="background:var(--teal)"></div><div class="perk-text"><strong>IA Claude real</strong> — gera roteiro personalizado baseado no seu perfil de viajante</div></div>
+        <div class="perk"><div class="perk-dot y" style="background:var(--gold)"></div><div class="perk-text"><strong>Algoritmos TSP</strong> — otimiza distância, tempo e custo automaticamente</div></div>
+        <div class="perk"><div class="perk-dot m"></div><div class="perk-text"><strong>Análise climática</strong> — alertas e dicas para cada parada do roteiro</div></div>
+      </div>
+      <button class="app-launch-btn" onclick="openApp()">
+        🚀 Abrir o Planejador Completo
+      </button>
+    </div>
+    <div class="app-frame">
+      <div class="app-frame-bar">
+        <div class="afb-dot r"></div>
+        <div class="afb-dot y"></div>
+        <div class="afb-dot g"></div>
+        <div class="afb-url">nomadroute.app/planner</div>
+      </div>
+      <img src="https://images.unsplash.com/photo-1488646953014-85cb44e25828?w=1000&q=80" loading="lazy" alt="Viagem" style="width:100%;height:440px;object-fit:cover;display:block;filter:brightness(.65) saturate(1.3)">
+      <div style="position:relative;margin-top:-70px;padding:22px;background:linear-gradient(0deg,#0a0f0b 65%,transparent)">
+        <div style="display:flex;gap:9px;align-items:center;flex-wrap:wrap">
+          <div style="background:rgba(90,170,66,.12);border:1px solid rgba(90,170,66,.25);border-radius:9px;padding:9px 13px;font-size:.76rem;color:var(--egreen2)">🧠 TSP — Economize km e custos otimizando a rota</div>
+          <div style="background:rgba(45,216,138,.1);border:1px solid rgba(45,216,138,.22);border-radius:9px;padding:9px 13px;font-size:.76rem;color:var(--emint)">✅ 7 destinos · 25 dias · €1.800</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════ FOOTER ═══════════ -->
+
+      <!-- ══ Seção CTA Final ══ -->
+      <section class="final-cta-section">
+        <div class="final-cta-inner">
+          <div class="final-cta-bg-orbs"><div class="fco fco-1"></div><div class="fco fco-2"></div><div class="fco fco-3"></div></div>
+          <div class="final-cta-content">
+            <div class="final-cta-tag">✦ Comece agora — é grátis</div>
+            <h2 class="final-cta-title">Sua próxima aventura<br>começa <em>com um clique</em></h2>
+            <p class="final-cta-sub">Mais de 47.000 roteiros planejados. Junte-se a viajantes que já descobriram a forma mais inteligente de explorar o mundo.</p>
+            <div class="final-cta-actions">
+              <button class="final-cta-btn-primary" onclick="document.getElementById('appLaunchBtn').click()">
+                <span>🗺️ Planejar minha viagem</span><span class="fcta-arrow">→</span>
+              </button>
+              <div class="final-cta-social">
+                <div class="fcs-avatars">
+                  <div class="fcs-av" style="background:linear-gradient(135deg,#f05a28,#c94022)">A</div>
+                  <div class="fcs-av" style="background:linear-gradient(135deg,#1a6fb5,#0f4c81)">M</div>
+                  <div class="fcs-av" style="background:linear-gradient(135deg,#00a896,#007a6c)">R</div>
+                  <div class="fcs-more fcs-av">+44k</div>
+                </div>
+                <span class="fcs-text">viajantes ativos</span>
+              </div>
+            </div>
+            <div class="final-cta-features">
+              <span class="fcf-item">✓ Sem cadastro</span><span class="fcf-sep">·</span>
+              <span class="fcf-item">✓ 100% gratuito</span><span class="fcf-sep">·</span>
+              <span class="fcf-item">✓ IA em tempo real</span><span class="fcf-sep">·</span>
+              <span class="fcf-item">✓ 199 aeroportos</span>
+            </div>
+          </div>
+        </div>
+      </section>
+<footer class="footer">
+  <div class="footer-top">
+    <div>
+      <div class="footer-brand">
+        <div style="width:30px;height:30px;background:linear-gradient(135deg,var(--fern),var(--moss));border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:14px">🧭</div>
+        Nomad<em>Route</em>
+      </div>
+      <div class="footer-tagline">O planejador de mochilão mais inteligente do mundo.</div>
+    </div>
+    <div class="footer-links">
+      <div class="footer-col">
+        <h4>Produto</h4>
+        <a>Planejar</a><a>Como Funciona</a><a>Premium</a><a>API</a>
+      </div>
+      <div class="footer-col">
+        <h4>Destinos</h4>
+        <a>América do Sul</a><a>Europa</a><a>Ásia</a><a>África</a>
+      </div>
+      <div class="footer-col">
+        <h4>Empresa</h4>
+        <a>Sobre nós</a><a>Blog</a><a>Carreiras</a><a>Contato</a>
+      </div>
+    </div>
+  </div>
+  <!-- Newsletter -->
+      <div class="footer-newsletter">
+        <div class="fnl-text">
+          <div class="fnl-title">Inspiração na sua caixa de entrada</div>
+          <div class="fnl-sub">Roteiros, dicas e ofertas exclusivas toda semana</div>
+        </div>
+        <form class="fnl-form" onsubmit="etoast('✅ Inscrito com sucesso!','suc');return false;">
+          <input class="fnl-input" type="email" placeholder="seu@email.com" aria-label="Seu email para newsletter">
+          <button class="fnl-btn" type="submit">Quero receber →</button>
+        </form>
+      </div>
+      <div class="footer-bottom">
+    <span>© 2025 NomadRoute — Feito com ✦ para viajantes. Todos os direitos reservados.</span>
+    <span>Feito com 🌿 para quem ama aventura</span>
+  </div>
+</footer>
+
+<!-- ═══════════════════════════════════════════════
+   EMBEDDED FULL APP
+═══════════════════════════════════════════════ -->
+<div class="app-embed" id="appEmbed">
+  <div class="elov" id="elov">
+    <div class="elspin"></div>
+    <div class="eltxt" id="eltxt">Calculando...</div>
+    <div class="elsub" id="elsub"></div>
+  </div>
+  <div class="etoast" id="etoast"></div>
+
+  <div class="embed-topbar">
+    <div class="embed-brand">
+      <div style="width:28px;height:28px;background:linear-gradient(135deg,var(--fern),var(--moss));border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:13px">🧭</div>
+      Nomad<em>Route</em>
+    </div>
+    <button class="embed-close" onclick="closeApp()">← Voltar ao site</button>
+  </div>
+
+  <div class="embed-content">
+    <div class="eapp">
+
+      <!-- LEFT PANEL -->
+      <div class="epanel-l">
+        <div class="eptabs">
+          <div class="eptab on" onclick="etab('planner',this)">🗺️ Planejar</div>
+          <div class="eptab" onclick="etab('tsp',this)">⚖️ TSP</div>
+          <div class="eptab" onclick="etab('analysis',this)">🔍 Análise</div>
+          <div class="eptab" onclick="etab('ai',this)">✦ IA</div>
+          <div class="eptab" onclick="etab('budget',this)">💰 Budget</div>
+        </div>
+        <!-- Step tracker -->
+        <div class="estep-track" id="estepTrack">
+          <div class="estep done" id="estep1">
+            <div class="estep-dot">✓</div>
+            <div class="estep-lbl">Destinos</div>
+          </div>
+          <div class="estep" id="estep2">
+            <div class="estep-dot">2</div>
+            <div class="estep-lbl">Datas</div>
+          </div>
+          <div class="estep" id="estep3">
+            <div class="estep-dot">3</div>
+            <div class="estep-lbl">Viajantes</div>
+          </div>
+          <div class="estep" id="estep4">
+            <div class="estep-dot">4</div>
+            <div class="estep-lbl">Pronto</div>
+          </div>
+        </div>
+        <div class="epbody">
+
+          <!-- PLANNER -->
+          <div id="etab-planner">
+            <div class="etraveler-bar" onclick="openTravelerModal()">
+              <div class="et-avatar" id="etavMain">🎒</div>
+              <div style="flex:1">
+                <div class="et-count" id="etravCount">1 Viajante</div>
+                <div class="et-sub" id="etravSub">Mochileiro · Clique para editar</div>
+              </div>
+              <div id="etravAvatars" style="display:flex;gap:-4px"></div>
+              <span style="font-size:.68rem;color:var(--efg3)">›</span>
+            </div>
+            <!-- Chips de perfil rápido — clicável sem abrir modal -->
+            <div class="eprofile-quick-row" id="eProfileQuickRow">
+              <span class="epqr-label">Perfil:</span>
+              <div class="eprofile-quick-chips" id="eProfileQuickChips">
+                <button class="epqchip on" data-p="mochileiro" onclick="eQuickProfile('mochileiro',this)">🎒 Mochileiro</button>
+                <button class="epqchip" data-p="economico" onclick="eQuickProfile('economico',this)">💰 Econômico</button>
+                <button class="epqchip" data-p="conforto" onclick="eQuickProfile('conforto',this)">⭐ Conforto</button>
+                <button class="epqchip" data-p="luxo" onclick="eQuickProfile('luxo',this)">✨ Luxo</button>
+                <button class="epqchip" data-p="familia" onclick="eQuickProfile('familia',this)">👨‍👩‍👧 Família</button>
+                <button class="epqchip" data-p="aventura" onclick="eQuickProfile('aventura',this)">🏔️ Aventura</button>
+              </div>
+            </div>
+
+
+
+            <div class="edate-bar">
+              <div class="edmode-row">
+                <div class="edmode on" onclick="eSwitchDateMode('quick',this)">Rápido</div>
+                <div class="edmode"    onclick="eSwitchDateMode('manual',this)">Manual</div>
+                <div class="edmode"    onclick="eSwitchDateMode('flex',this)">Flexível</div>
+              </div>
+
+              <!-- RÁPIDO -->
+              <div id="edm-quick" class="equick-dates">
+                <button class="eqd on" onclick="setEQuick(this,'1w')">1 semana</button>
+                <button class="eqd"    onclick="setEQuick(this,'2w')">2 semanas</button>
+                <button class="eqd"    onclick="setEQuick(this,'1m')">1 mês</button>
+                <button class="eqd"    onclick="setEQuick(this,'weekend')">Fim de semana</button>
+              </div>
+
+              <!-- MANUAL -->
+              <div id="edm-manual" style="display:none;padding:9px">
+                <div class="etrav-form-grid">
+                  <div>
+                    <div class="etrav-form-label">Início</div>
+                    <input type="date" id="eDateStart"
+                      style="width:100%;background:var(--ecard);border:1px solid var(--erim);border-radius:7px;padding:7px 9px;font-size:.8rem;color:var(--efg);font-family:inherit;outline:none;cursor:pointer;transition:border-color .2s"
+                      onfocus="this.style.borderColor='var(--egreen)'" onblur="this.style.borderColor='var(--erim)'"
+                      onchange="eManualDateChange()">
+                  </div>
+                  <div>
+                    <div class="etrav-form-label">Fim</div>
+                    <input type="date" id="eDateEnd"
+                      style="width:100%;background:var(--ecard);border:1px solid var(--erim);border-radius:7px;padding:7px 9px;font-size:.8rem;color:var(--efg);font-family:inherit;outline:none;cursor:pointer;transition:border-color .2s"
+                      onfocus="this.style.borderColor='var(--egreen)'" onblur="this.style.borderColor='var(--erim)'"
+                      onchange="eManualDateChange()">
+                  </div>
+                </div>
+                <div id="eManualDateInfo" class="etrav-form-note"></div>
+              </div>
+
+              <!-- FLEXÍVEL -->
+              <div id="edm-flex" style="display:none;padding:9px">
+                <div class="etrav-form-label">Mês de preferência</div>
+                <div class="etrav-form-chips" id="eFlexMonths">
+                  <button class="eqd" onclick="eToggleFlexMonth(this,'jan')">Jan</button>
+                  <button class="eqd" onclick="eToggleFlexMonth(this,'fev')">Fev</button>
+                  <button class="eqd" onclick="eToggleFlexMonth(this,'mar')">Mar</button>
+                  <button class="eqd" onclick="eToggleFlexMonth(this,'abr')">Abr</button>
+                  <button class="eqd" onclick="eToggleFlexMonth(this,'mai')">Mai</button>
+                  <button class="eqd" onclick="eToggleFlexMonth(this,'jun')">Jun</button>
+                  <button class="eqd" onclick="eToggleFlexMonth(this,'jul')">Jul</button>
+                  <button class="eqd" onclick="eToggleFlexMonth(this,'ago')">Ago</button>
+                  <button class="eqd" onclick="eToggleFlexMonth(this,'set')">Set</button>
+                  <button class="eqd" onclick="eToggleFlexMonth(this,'out')">Out</button>
+                  <button class="eqd" onclick="eToggleFlexMonth(this,'nov')">Nov</button>
+                  <button class="eqd" onclick="eToggleFlexMonth(this,'dez')">Dez</button>
+                </div>
+                <div class="etrav-form-label">Duração aproximada</div>
+                <div class="etrav-form-chips" style="margin-bottom:0">
+                  <button class="eqd on" onclick="setEQuick(this,'1w')">1 semana</button>
+                  <button class="eqd"    onclick="setEQuick(this,'2w')">2 semanas</button>
+                  <button class="eqd"    onclick="setEQuick(this,'1m')">1 mês</button>
+                  <button class="eqd"    onclick="setEQuick(this,'weekend')">Fim de semana</button>
+                </div>
+              </div>
+            </div>
+            <div class="etrip-sum">
+              <div class="etsm">
+                <div class="etsm-icon">📍</div>
+                <div class="etsm-val" id="etsmC">—</div>
+                <div class="etsm-lbl">Cidades</div>
+              </div>
+              <div class="etsm-div"></div>
+              <div class="etsm">
+                <div class="etsm-icon">🌙</div>
+                <div class="etsm-val" id="etsmD">—</div>
+                <div class="etsm-lbl">Dias</div>
+              </div>
+              <div class="etsm-div"></div>
+              <div class="etsm">
+                <div class="etsm-icon">🛫</div>
+                <div class="etsm-val" id="etsmS">—</div>
+                <div class="etsm-lbl">Início</div>
+              </div>
+              <div class="etsm-div"></div>
+              <div class="etsm">
+                <div class="etsm-icon">🛬</div>
+                <div class="etsm-val" id="etsmE">—</div>
+                <div class="etsm-lbl">Fim</div>
+              </div>
+            </div>
+            <div class="edlist-header">
+              <span class="edlist-title">Suas cidades</span>
+              <span class="edlist-hint">↕ arraste para reordenar</span>
+            </div>
+            <div class="edlist" id="edlist"></div>
+            <button class="eadd-dest" onclick="eaddDest()">+ Adicionar destino</button>
+            <div class="eslabel">O que você prefere?</div>
+            <div class="echips">
+              <button class="echip on g" onclick="this.classList.toggle('on')">💰 Budget</button>
+              <button class="echip on" onclick="this.classList.toggle('on')">🎒 Solo</button>
+              <button class="echip" onclick="this.classList.toggle('on')">⚡ Rápido</button>
+              <button class="echip" onclick="this.classList.toggle('on')">🌿 Eco</button>
+              <button class="echip" onclick="this.classList.toggle('on')">🏕️ Camping</button>
+            </div>
+            <button class="epbtn epbtn-plan epbtn-main" onclick="eplan()">
+              <span id="ePlanBtnTxt">🗺️ Encontrar rotas</span>
+            </button>
+            <button class="epbtn epbtn-tsp" id="etspBtn" onclick="erunTSP()" style="display:none">
+              ⚖️ Otimizar ordem das cidades
+            </button>
+            <button class="epbtn epbtn-ai" id="eanalBtn" onclick="etab('analysis',null,2)" style="display:none">
+              🔍 Analisar meu roteiro
+            </button>
+            
+            <div class="eresults" id="eresults">
+
+              <!-- Cabeçalho da rota -->
+              <div class="eroute-header">
+                <div class="eroute-title" id="erouteTitle">Sua rota está pronta! 🎉</div>
+                <div class="eroute-badges">
+                  <span class="ebdg ebdg-b" id="ebdgC">—</span>
+                  <span class="ebdg ebdg-g" id="ebdgD">—</span>
+                </div>
+              </div>
+
+              <!-- Segmentos de rota -->
+              <div class="eseg-section-label">Como você vai se locomover</div>
+              <div id="esegList"></div>
+
+              <!-- Resumo de custos — visual melhorado -->
+              <div class="ecostbox">
+                <div class="ecosttitle">💰 Quanto vai custar</div>
+                <div class="ecrows">
+                  <div class="ecrow">
+                    <div class="ecrow-left"><span class="ecrow-icon">✈️</span><span class="eclbl">Passagens e transporte</span></div>
+                    <span class="ecval" id="ecTrans">—</span>
+                  </div>
+                  <div class="ecrow">
+                    <div class="ecrow-left"><span class="ecrow-icon">🏨</span><span class="eclbl">Hospedagem</span></div>
+                    <span class="ecval" id="ecHotel">—</span>
+                  </div>
+                  <div class="ecrow">
+                    <div class="ecrow-left"><span class="ecrow-icon">🍽️</span><span class="eclbl">Alimentação</span></div>
+                    <span class="ecval" id="ecFood">—</span>
+                  </div>
+                </div>
+                <div class="ectotal">
+                  <div class="ectlbl-wrap">
+                    <span class="ectlbl">Total estimado</span>
+                    <span class="ectlbl-sub" id="ectotalSub"></span>
+                  </div>
+                  <span class="ectval" id="ecTotal">—</span>
+                </div>
+                <div class="ecost-disclaimer">Valores aproximados · Preços reais podem variar</div>
+              </div>
+
+              <!-- Dicas personalizadas -->
+              <!-- Gráfico de custo -->
+              <div id="eCostChart" class="ecost-chart" style="display:none"></div>
+
+              <div class="etipsbox">
+                <div class="etipstitle">💡 Dicas para sua viagem</div>
+                <div id="etipsList"></div>
+              </div>
+
+              <!-- Ações de exportação -->
+              <div class="eexpbar">
+                <button class="eexpbtn" onclick="etoast('📄 PDF em breve!','ai')">📄 Salvar PDF</button>
+                <button class="eexpbtn" onclick="etoast('🗺️ Em breve!','ai')">🗺️ Ver no Maps</button>
+                <button class="eexpbtn" onclick="eShareRoute()">🔗 Compartilhar</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- TSP TAB -->
+          <div id="etab-tsp" style="display:none">
+            <!-- TSP header -->
+            <div class="etab-header">
+              <div class="etab-header-icon">🧮</div>
+              <div>
+                <div class="etab-header-title">Otimização de Rota</div>
+                <div class="etab-header-sub">Encontre a ordem ideal de cidades</div>
+              </div>
+            </div>
+            <div class="eslabel">Escolha o algoritmo</div>
+            <div class="ealgo-grid">
+              <div class="algo-card on" onclick="document.querySelectorAll('.algo-card').forEach(a=>a.classList.remove('on'));this.classList.add('on');eSelAlgo='nn'">
+                <span class="algo-name">Nearest Neighbor</span>
+                <span class="algo-meta">Rápido · O(n²)</span>
+              </div>
+              <div class="algo-card" onclick="document.querySelectorAll('.algo-card').forEach(a=>a.classList.remove('on'));this.classList.add('on');eSelAlgo='sa'">
+                <span class="algo-name">Sim. Annealing</span>
+                <span class="algo-meta">Preciso</span>
+              </div>
+              <div class="algo-card" onclick="document.querySelectorAll('.algo-card').forEach(a=>a.classList.remove('on'));this.classList.add('on');eSelAlgo='ga'">
+                <span class="algo-name">Genetic Algo</span>
+                <span class="algo-meta">Robusto</span>
+              </div>
+            </div>
+            <button class="epbtn epbtn-tsp" onclick="erunTSPFull()" id="eTspBtn">🧠 Rodar Otimizador</button>
+            <div id="etspVersions"></div>
+          </div>
+
+          <!-- ANALYSIS TAB -->
+          <div id="etab-analysis" style="display:none">
+            <div class="etab-header">
+              <div class="etab-header-icon">🔍</div>
+              <div>
+                <div class="etab-header-title">Análise de Roteiro</div>
+                <div class="etab-header-sub">Clima, logística e oportunidades</div>
+              </div>
+            </div>
+            <div class="eanalysis-box">
+              <div class="eanalysis-title">🧠 Análise Inteligente</div>
+              <button class="eanalysis-btn" onclick="erunAnalysis()">
+                🔍 Analisar Meu Roteiro
+              </button>
+              <div class="etab-hint">Planeje sua rota primeiro para uma análise completa</div>
+              <div id="eanalResults" class="epbtn-spacer"></div>
+            </div>
+          </div>
+
+          <!-- AI CLAUDE TAB -->
+          <div id="etab-ai" style="display:none">
+            <div class="etab-header">
+              <div class="etab-header-icon">✦</div>
+              <div>
+                <div class="etab-header-title">IA Claude</div>
+                <div class="etab-header-sub">Roteiro personalizado em segundos</div>
+              </div>
+            </div>
+            <div class="eai-box">
+              <div class="eai-title">✦ IA Claude — Planner Real</div>
+              <div class="eai-chat" id="eaiChat">
+                <div class="eai-msg assistant">👋 Olá! Descreva sua viagem e vou montar um roteiro personalizado. Inclua orçamento, estilo, duração e destinos.</div>
+              </div>
+              <!-- Chips de sugestão rápida -->
+              <div class="eai-chips" id="eaiChips">
+                <button class="eai-chip" onclick="eAiChip(this,'Mochilão Europa 3 semanas, €1.200, jovem solo, hostels e cultura')">🎒 Mochilão Europa</button>
+                <button class="eai-chip" onclick="eAiChip(this,'Família com 2 crianças, 10 dias no Nordeste brasileiro, praias e natureza')">👨‍👩‍👧 Família Nordeste</button>
+                <button class="eai-chip" onclick="eAiChip(this,'Lua de mel 12 dias Sudeste Asiático, casal, hotéis boutique, romantico')">💑 Lua de Mel Ásia</button>
+                <button class="eai-chip" onclick="eAiChip(this,'Road trip América do Sul 30 dias, €2.000, aventura e trilhas')">🏔️ Road Trip Sul</button>
+              </div>
+              <div class="eai-input-row" style="margin-top:8px">
+                <textarea class="eai-textarea" id="eaiPrompt"
+                  placeholder="Ex: Mochilão 30 dias América do Sul, €1500, trilhas e natureza…"
+                  rows="2"></textarea>
+                <button class="eai-send-btn" onclick="egenAI()" id="eaiBtnSend">
+                  🌿 Gerar
+                </button>
+              </div>
+              <div class="eai-suggestions">
+                <span class="eai-sug-label">Exemplos:</span>
+                <button class="eai-sug" onclick="document.getElementById('eaiPrompt').value=this.dataset.v;document.getElementById('eaiPrompt').focus()" data-v="Mochilão 3 semanas Europa, €1200, hostels e trem">🎒 Mochilão Europa</button>
+                <button class="eai-sug" onclick="document.getElementById('eaiPrompt').value=this.dataset.v;document.getElementById('eaiPrompt').focus()" data-v="Lua de mel 10 dias Sudeste Asiático, comfort, praias e cultura">💑 Lua de mel Ásia</button>
+                <button class="eai-sug" onclick="document.getElementById('eaiPrompt').value=this.dataset.v;document.getElementById('eaiPrompt').focus()" data-v="Road trip 2 semanas pelo Brasil, carro, natureza e gastronomia">🚗 Road trip Brasil</button>
+              </div>
+            </div>
+            <div id="eaiResult" style="display:none"></div>
+          </div>
+
+          <!-- BUDGET TAB -->
+          <div id="etab-budget" style="display:none">
+            <div class="etab-header">
+              <div class="etab-header-icon">💰</div>
+              <div>
+                <div class="etab-header-title">Planejamento de Budget</div>
+                <div class="etab-header-sub">Defina e distribua seu orçamento</div>
+              </div>
+            </div>
+            <!-- Slider de orçamento -->
+            <div class="ebudget-section">
+              <div class="ebudget-title">💰 Orçamento Total</div>
+              <input type="range" min="300" max="20000" value="1500" step="100" id="eBudgetSlider"
+                style="width:100%;accent-color:var(--egreen);margin-bottom:8px;cursor:pointer;display:block"
+                oninput="document.getElementById('eBudgetVal').textContent=eFmtPrice(parseInt(this.value)/((eCurrencyRates[eCurrency]||{rate:1}).rate))">
+              <div id="eBudgetVal" class="ebudget-total-val" class="ebudget-val-large">R$1.500</div>
+              <div class="ebudget-pp" style="text-align:center;margin-bottom:12px">orçamento estimado para a viagem</div>
+            </div>
+
+            <!-- Breakdown por categoria -->
+            <div class="ebudget-section" id="eBudgetBreakdown" style="display:none">
+              <div class="ebudget-title">📊 Distribuição</div>
+              <div id="eBudgetRows"></div>
+            </div>
+
+            <!-- Total -->
+            <div class="ebudget-total" id="eBudgetTotal" style="display:none">
+              <div>
+                <div class="ebudget-total-lbl">Total Estimado</div>
+                <div class="ebudget-pp" id="eBudgetPP"></div>
+              </div>
+              <div class="ebudget-total-val" id="eBudgetTotalVal">—</div>
+            </div>
+
+            <button class="epbtn epbtn-plan" onclick="eShowBudgetPlan()">✦ Calcular Distribuição</button>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- MAP -->
+      <div class="emap-area" id="eMapArea">
+        <div id="eLeafletMap" style="width:100%;height:100%;z-index:1;min-height:400px;background:#dceef8"></div>
+        <div class="emlegend">
+          <div class="emlgt">Transporte</div>
+          <div class="emlgr"><div class="emlgln emlgln-plane"></div> Avião</div>
+          <div class="emlgr"><div class="emlgln emlgln-train"></div> Trem</div>
+          <div class="emlgr"><div class="emlgln emlgln-bus"></div> Ônibus</div>
+          <div class="emlgr"><div class="emlgln emlgln-ferry"></div> Ferry</div>
+        </div>
+        <div class="emstats" id="emStatsBar" style="display:none">
+          <div class="emstat"><span class="emstat-i">📍</span><span class="emstat-v" id="emStatCities">—</span><span class="emstat-l">cidades</span></div>
+          <div class="emstat"><span class="emstat-i">📏</span><span class="emstat-v" id="emStatDist">—</span><span class="emstat-l">km</span></div>
+          <div class="emstat"><span class="emstat-i">🌙</span><span class="emstat-v" id="emStatDays">—</span><span class="emstat-l">dias</span></div>
+        </div>
+      </div>
+      
+
+<!-- RIGHT PANEL -->
+      <div class="epanel-r">
+        <div class="ertl-title">📋 Roteiro</div>
+        <div id="etlList"><div class="etsp-map-msg">Planeje a rota para<br>ver o roteiro aqui</div></div>
+      </div>
+
+    </div><!-- .eapp -->
+  </div><!-- .embed-content -->
+
+  <!-- TRAVELER MODAL -->
+  <div class="etrav-modal" id="etravModal">
+    <div class="etrav-box">
+      <div class="etrav-title">👥 Viajantes</div>
+      <div class="etrav-sub">Defina quem vai — tipo e idade de crianças afetam custos e sugestões da IA</div>
+      <div class="etrav-list" id="etravList"></div>
+
+      <!-- ADD FORM -->
+      <div style="background:var(--ecard);border:1px solid var(--erim);border-radius:10px;padding:12px;margin-bottom:12px">
+        <div style="font-size:.62rem;font-weight:700;color:var(--efg3);letter-spacing:.08em;text-transform:uppercase;margin-bottom:8px">Adicionar viajante</div>
+
+        <!-- Type toggle -->
+        <div class="etsp-save-row">
+          <button id="etravTypeAdult" onclick="eSetTravType('adulto')"
+            style="flex:1;padding:6px;border-radius:7px;font-size:.75rem;font-family:inherit;cursor:pointer;font-weight:600;background:rgba(90,170,66,.15);border:1px solid rgba(90,170,66,.5);color:var(--egreen2);transition:all .2s">
+            🧑 Adulto
+          </button>
+          <button id="etravTypeChild" onclick="eSetTravType('crianca')"
+            style="flex:1;padding:6px;border-radius:7px;font-size:.75rem;font-family:inherit;cursor:pointer;font-weight:600;background:none;border:1px solid var(--erim2);color:var(--efg3);transition:all .2s">
+            🧒 Criança
+          </button>
+        </div>
+
+        <!-- Name + Age row -->
+        <div style="display:flex;gap:6px;margin-bottom:8px">
+          <input class="etrav-input" id="etravNameInput" placeholder="Nome…" maxlength="20" style="flex:2">
+          <input class="etrav-input" id="etravAgeInput" placeholder="Idade" type="number" min="0" max="17"
+            style="flex:1;display:none" oninput="this.value=Math.min(17,Math.max(0,this.value))">
+        </div>
+
+        <!-- Role chips (only for adults) -->
+        <div class="etrav-roles" id="etravRoleSelect" style="margin-bottom:9px">
+          <button class="etrav-role-btn on" data-role="🎒 Mochileiro">🎒 Mochileiro</button>
+          <button class="etrav-role-btn" data-role="📸 Fotógrafo">📸 Fotógrafo</button>
+          <button class="etrav-role-btn" data-role="🧗 Aventureiro">🧗 Aventureiro</button>
+          <button class="etrav-role-btn" data-role="🍜 Gastronômico">🍜 Gastronômico</button>
+          <button class="etrav-role-btn" data-role="😎 Relaxado">😎 Relaxado</button>
+          <button class="etrav-role-btn" data-role="🎭 Cultural">🎭 Cultural</button>
+        </div>
+
+        <button style="width:100%;background:linear-gradient(135deg,var(--fern),var(--moss));border:none;color:#fff;padding:9px;border-radius:8px;cursor:pointer;font-size:.8rem;font-family:inherit;font-weight:700" onclick="eAddTraveler()">+ Adicionar</button>
+      </div>
+
+      <div class="etrav-actions">
+        <button class="etrav-btn etrav-btn-close" onclick="closeTravelerModal()">Fechar</button>
+        <button class="etrav-btn etrav-btn-add" onclick="closeTravelerModal();eUpdateTravelerBar();etoast('✅ Viajantes salvos!','suc')">Confirmar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- SIMULATION OVERLAY -->
+  <div class="esim-overlay" id="esimOverlay">
+    <div class="esim-box">
+      <div class="esim-header">
+        <div class="esim-title">🛫 Simulação da Viagem</div>
+        <button class="esim-close" onclick="eCloseSim()">✕ Fechar</button>
+      </div>
+      <div class="esim-track" id="esimTrack">
+        <div class="esim-route-bar" id="esimRouteBar">
+          <span class="esim-route-text" id="esimRouteText">—</span>
+          <div class="esim-route-fill" id="esimRouteFill"></div>
+          <span class="esim-plane" id="esimPlane">✈️</span>
+        </div>
+        <div class="esim-city-card" id="esimCityCard">
+          <div class="esim-city-name" id="esimCityName">—</div>
+          <div class="esim-city-meta" id="esimCityMeta">—</div>
+          <div class="esim-city-facts" id="esimCityFacts"></div>
+        </div>
+      </div>
+      <div class="esim-footer">
+        <div>
+          <div class="esim-day-badge" id="esimDayBadge">Dia 1</div>
+          <div class="esim-progress-dots" id="esimDots"></div>
+        </div>
+        <div class="esim-ctrl">
+          <button class="esim-btn esim-btn-prev" onclick="eSimStep(-1)">← Anterior</button>
+          <button class="esim-btn esim-btn-next" onclick="eSimStep(1)">Próximo →</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div><!-- .app-embed -->
+
+<script src="js/airports.js"></script>
+<script src="js/cities.js"></script>
+<script src="js/app.js"></script>
+
+  <!-- CTA Flutuante Mobile -->
+  <div class="floating-cta" id="floatingCta">
+    <button class="floating-cta-btn" onclick="document.getElementById('appLaunchBtn').click()" aria-label="Planejar minha viagem">
+      <span class="floating-cta-icon">🗺️</span>
+      <span class="floating-cta-text">Planejar minha viagem</span>
+      <span class="floating-cta-arrow">→</span>
+    </button>
+  </div>
+
+</body>
+</html>
