@@ -708,7 +708,7 @@ function eShubRenderExtraDests() {
     <div class="shub-extra-dest" id="shubExtra_${i}">
       <div class="shub-label" style="white-space:nowrap;margin-right:4px">📍 Parada ${i+2}</div>
       <input class="shub-input shub-extra-input" placeholder="Adicionar destino…"
-        value="${d.input}" autocomplete="off"
+        autocomplete="off"
         oninput="eShubExtraInput(${i},this.value)"
         onblur="setTimeout(()=>document.getElementById('shubExtraAC_${i}')?.classList.remove('open'),200)">
       <div class="shub-ac" id="shubExtraAC_${i}"></div>
@@ -718,6 +718,11 @@ function eShubRenderExtraDests() {
       <button class="shub-extra-remove" onclick="eShubRemoveDest(${i})">×</button>
     </div>
   `).join('');
+  // Set input values safely via DOM to avoid XSS through attribute injection
+  _shubExtraDests.forEach((d, i) => {
+    const inp = row.querySelector(`#shubExtra_${i} input`);
+    if(inp) inp.value = d.input;
+  });
 }
 
 function eShubExtraInput(idx, q) {
@@ -1752,18 +1757,18 @@ function eRenderTimeline(){
     const fr=f[i],to=f[i+1],key=`${fr.ap.code}-${to.ap.code}`;
     const sel=eSelTr[key]||{type:'plane',price:80,time:'2h'};
     tl.innerHTML+=`<div class="etl-item"><div class="etl-l"><div class="etl-day">D${day}</div><div class="etl-dot ${i===0?'g':''}"></div><div class="etl-line"></div></div>
-      <div class="etl-c"><div class="etl-cities">${fr.input}<span class="etl-arr"> › </span>${to.input}</div>
-        <div class="etl-aps">${fr.ap.code}→${to.ap.code}</div>
+      <div class="etl-c"><div class="etl-cities">${eSanitize(fr.input)}<span class="etl-arr"> › </span>${eSanitize(to.input)}</div>
+        <div class="etl-aps">${eSanitize(fr.ap.code)}→${eSanitize(to.ap.code)}</div>
         <div class="etl-meta"><span class="etlchip ${tcls[sel.type]}">${ticon[sel.type]} ${sel.time}</span><span class="etlchip def">${eFmtPrice(sel.price)}</span></div>
         <button class="etl-buy" onclick="etoast('🎟️ Buscando passagens…','suc')">Ver passagens</button>
       </div></div>`;
     day++;
     if(to.days>0){
-      tl.innerHTML+=`<div class="etl-city-stay"><div class="etl-cs-name">${to.ap.flag} ${to.input}</div><div class="etl-cs-days">🛏️ ${to.days} noite${to.days>1?'s':''}</div></div>`;
+      tl.innerHTML+=`<div class="etl-city-stay"><div class="etl-cs-name">${to.ap.flag} ${eSanitize(to.input)}</div><div class="etl-cs-days">🛏️ ${to.days} noite${to.days>1?'s':''}</div></div>`;
       day+=to.days;
     }
   }
-  if(f.length>1){const fin=f[f.length-1];tl.innerHTML+=`<div class="etl-item"><div class="etl-l"><div class="etl-day">D${day}</div><div class="etl-dot r"></div></div><div class="etl-c"><div class="etl-cities">🏁 ${fin.input}</div></div></div>`;}
+  if(f.length>1){const fin=f[f.length-1];tl.innerHTML+=`<div class="etl-item"><div class="etl-l"><div class="etl-day">D${day}</div><div class="etl-dot r"></div></div><div class="etl-c"><div class="etl-cities">🏁 ${eSanitize(fin.input)}</div></div></div>`;}
 }
 
 // TSP
@@ -1936,7 +1941,8 @@ async function egenAI(){
     eAiHistory.push({ role: 'assistant', content: reply });
 
     loadMsg.classList.remove('loading');
-    loadMsg.innerHTML = reply.replace(/\n/g, '<br>').replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>').replace(/\*(.*?)\*/g, '<em>$1</em>');
+    const safeReply = reply.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    loadMsg.innerHTML = safeReply.replace(/\n/g, '<br>').replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>').replace(/\*(.*?)\*/g, '<em>$1</em>');
 
     // Check if response has importable route
     const hasRoute = reply.toLowerCase().includes('→') || reply.toLowerCase().includes('rota') || reply.toLowerCase().includes('cidades');
